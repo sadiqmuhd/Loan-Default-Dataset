@@ -4,7 +4,7 @@ import pickle
 import pandas as pd
 import os
 from schema import LoanRequest, PredictionResponse
-from feature_engineering import add_features  # import your feature function
+from app.feature_engineering import add_features  # import your feature function
 
 app = FastAPI(
     title="Loan Default Prediction API",
