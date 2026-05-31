@@ -12,7 +12,7 @@ from sklearn.compose import ColumnTransformer
 from xgboost import XGBClassifier
 
 # Load data
-train = pd.read_csv("Loan_Default.csv")
+train = pd.read_csv("data/Loan_Default.csv")
 
 X = train.drop(columns=['Status'])
 y = train['Status']
