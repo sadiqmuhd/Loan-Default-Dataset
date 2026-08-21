@@ -10,7 +10,12 @@ builder = "NIXPACKS"
 
 [deploy]
 # Railway injects $PORT. Binding to it is required or the deploy is unreachable.
-startCommand = "uvicorn loan_default.api.main:app --host 0.0.0.0 --port $PORT --workers 2"
+#
+# One worker, deliberately. Each worker holds its own copy of the model and SHAP
+# explainer at roughly 250MB resident, so two would exceed a 512MB instance.
+# FastAPI runs the sync scoring endpoints in a threadpool, so a single worker
+# still serves concurrent requests; raise this only alongside the memory limit.
+startCommand = "uvicorn loan_default.api.main:app --host 0.0.0.0 --port $PORT --workers 1"
 
 # Railway waits for this to return 200 before routing traffic. /health/ready
 # only succeeds once the model is loaded AND has scored a canary record, so a

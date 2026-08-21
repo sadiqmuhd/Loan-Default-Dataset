@@ -58,7 +58,7 @@ Python version comes from `.python-version` (3.11).
 From `railway.toml`:
 
 ```toml
-startCommand = "uvicorn loan_default.api.main:app --host 0.0.0.0 --port $PORT --workers 2"
+startCommand = "uvicorn loan_default.api.main:app --host 0.0.0.0 --port $PORT --workers 1"
 ```
 
 Two things are non-negotiable here:
@@ -70,6 +70,28 @@ Two things are non-negotiable here:
   the router cannot reach the app.
 
 `Procfile` carries the same command as a fallback for any platform that reads it.
+
+### Why one worker
+
+Each uvicorn worker holds its own copy of the model and the SHAP explainer.
+Measured resident set for a warm worker:
+
+```
+python baseline            15 MB
++ pandas/numpy/sklearn/xgb 131 MB
++ shap                     223 MB
++ fastapi                  235 MB
++ model artifact           245 MB
++ SHAP explainer           253 MB
+```
+
+About 250MB steady state. Two workers would sit on top of a 512MB instance and
+be killed by the OOM reaper on boot, which presents as a deploy that builds
+successfully and then restarts forever.
+
+The scoring endpoints are sync `def`, so FastAPI runs them in a threadpool and a
+single worker still handles concurrent requests. Raise the worker count only
+after raising the memory limit, and budget ~250MB each.
 
 ---
 
@@ -220,6 +242,10 @@ browsers anyway.
 
 **Build fails on `pip install --no-deps -e .`** — usually a `pyproject.toml`
 syntax error. Reproduce locally with the exact commands in §2.
+
+**Container builds, then restarts in a loop** — almost always memory. Check the
+worker count against the instance size using the figures above; the OOM kill
+often appears in the logs only as an abrupt exit with no traceback.
 
 **Deploy is healthy but requests time out** — the app is bound to the wrong
 interface or port. Check the start command uses `0.0.0.0` and `$PORT`.

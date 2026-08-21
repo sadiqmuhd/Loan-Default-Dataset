@@ -7,7 +7,7 @@ review / decline recommendation, and the reasons behind it.
 
 Dataset: 148,670 mortgage applications.
 
-[![CI](https://github.com/your-username/loan-default-prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/loan-default-prediction/actions/workflows/ci.yml)
+[![CI](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml)
 
 ---
 
@@ -87,8 +87,8 @@ Full breakdown, including performance by region and loan purpose, is in
 ## Try it
 
 ```bash
-git clone https://github.com/your-username/loan-default-prediction.git
-cd loan-default-prediction
+git clone https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline.git
+cd Loan-Default-ML-Pipeline
 make install
 make serve
 ```
