@@ -1,97 +1,38 @@
 """Every text file in the repository must be clean UTF-8 with no BOM.
 
 This exists because README.md once acquired a UTF-16 LE byte order mark (FF FE)
-in front of otherwise UTF-8 content - the signature of a PowerShell redirect,
-which defaults to UTF-16 on Windows. The body was never actually UTF-16, but
-GitHub reads the BOM, believes it, decodes the UTF-8 bytes two at a time and
-renders the whole page as CJK garbage. The file looked fine in most local
-editors, which is what made it worth a test rather than a one-off fix.
+in front of otherwise UTF-8 content. The body was never actually UTF-16, but
+GitHub reads the BOM, believes it, and renders the page as CJK garbage - and
+worse, `pip install -e .` fails outright, because pyproject.toml reads README.md
+as long_description. That took down CI and the deploy before any code ran.
+
+The checking logic lives in scripts/check_encoding.py rather than here, because
+CI has to run it before installing anything. These tests exercise that same
+script so the local suite and the CI gate can never disagree.
 """
 
 from __future__ import annotations
 
 import pathlib
+import subprocess
+import sys
 
 from loan_default.config import PROJECT_ROOT
 
-BOMS = {
-    b"\xff\xfe": "UTF-16 LE",
-    b"\xfe\xff": "UTF-16 BE",
-    b"\xef\xbb\xbf": "UTF-8 with BOM",
-}
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
-TEXT_SUFFIXES = {
-    ".md",
-    ".py",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".txt",
-    ".json",
-    ".cfg",
-    ".ini",
-    ".example",
-    ".ipynb",
-}
-TEXT_NAMES = {"Makefile", "Procfile", "Dockerfile", ".gitignore", ".dockerignore"}
-
-SKIP_DIRS = {
-    "venv",
-    ".venv",
-    ".git",
-    "__pycache__",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "node_modules",
-    "data",
-}
-
-
-def text_files() -> list[pathlib.Path]:
-    files = []
-    for path in PROJECT_ROOT.rglob("*"):
-        if not path.is_file():
-            continue
-        if any(part in SKIP_DIRS or part.endswith(".egg-info") for part in path.parts):
-            continue
-        if path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES:
-            files.append(path)
-    return sorted(files)
-
-
-FILES = text_files()
+from check_encoding import BOMS, problems, text_files  # noqa: E402
 
 
 def test_the_scan_actually_finds_files():
     """A guard that silently checks nothing is worse than no guard at all."""
-    assert len(FILES) > 20, f"Only found {len(FILES)} text files; the scan is misconfigured"
+    found = text_files(PROJECT_ROOT)
+    assert len(found) > 20, f"Only found {len(found)} text files; the scan is misconfigured"
 
 
-def test_no_text_file_has_a_byte_order_mark():
-    """Reported in one test rather than one per file, so the suite count stays
-    a count of behaviours rather than a count of files."""
-    offenders = []
-    for path in FILES:
-        head = path.read_bytes()[:3]
-        for bom, name in BOMS.items():
-            if head.startswith(bom):
-                offenders.append(f"{path.relative_to(PROJECT_ROOT)} ({name} BOM)")
-                break
-    assert not offenders, (
-        "These files start with a byte order mark. GitHub will trust it, decode "
-        "the file accordingly and render it as garbage:" + "".join(f"\n  {o}" for o in offenders)
-    )
-
-
-def test_every_text_file_decodes_as_utf8():
-    offenders = []
-    for path in FILES:
-        try:
-            path.read_bytes().decode("utf-8")
-        except UnicodeDecodeError as exc:
-            offenders.append(f"{path.relative_to(PROJECT_ROOT)}: {exc}")
-    assert not offenders, "Not valid UTF-8:" + "".join(f"\n  {o}" for o in offenders)
+def test_no_encoding_problems_anywhere():
+    issues = problems(PROJECT_ROOT)
+    assert not issues, "Encoding problems found:" + "".join(f"\n  {i}" for i in issues)
 
 
 def test_readme_starts_with_its_heading():
@@ -100,3 +41,34 @@ def test_readme_starts_with_its_heading():
     assert text.startswith("# Loan Default Prediction"), (
         f"README.md starts with {text[:40]!r} rather than its heading"
     )
+
+
+def test_the_checker_detects_a_bom_it_is_given(tmp_path: pathlib.Path):
+    """Proves the gate can fail, not just that it passes on a clean tree."""
+    (tmp_path / "clean.md").write_bytes(b"# fine\n")
+    for bom in BOMS:
+        offender = tmp_path / f"bad_{bom.hex()}.md"
+        offender.write_bytes(bom + b"# not fine\n")
+
+    issues = problems(tmp_path)
+    assert len(issues) == len(BOMS), f"Expected {len(BOMS)} problems, got: {issues}"
+    assert not any("clean.md" in issue for issue in issues)
+
+
+def test_the_checker_detects_invalid_utf8(tmp_path: pathlib.Path):
+    (tmp_path / "broken.md").write_bytes(bytes([0x48, 0x69, 0x80, 0x81]))
+    issues = problems(tmp_path)
+    assert len(issues) == 1
+    assert "not valid UTF-8" in issues[0]
+
+
+def test_the_script_runs_standalone_and_exits_zero():
+    """CI invokes it as a subprocess with no dependencies installed."""
+    result = subprocess.run(
+        [sys.executable, str(PROJECT_ROOT / "scripts" / "check_encoding.py")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "clean UTF-8" in result.stdout

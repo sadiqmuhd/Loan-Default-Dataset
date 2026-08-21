@@ -6,7 +6,7 @@ and exposes the model through a production FastAPI service.
 
 [![CI](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
-![Tests](https://img.shields.io/badge/tests-202%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-214%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)
 ![Model](https://img.shields.io/badge/held--out%20ROC--AUC-0.824-informational)
 
@@ -46,27 +46,27 @@ difference between a model and a lending decision.
 
 ```mermaid
 flowchart TD
-    A[Loan application] --> B[Input validation<br/><i>enums generated from the data</i>]
-    B --> C[Feature engineering<br/><i>one implementation, train and serve</i>]
-    C --> D[Calibrated PD model<br/><i>XGBoost + isotonic</i>]
+    A["Loan application"] --> B["Input validation<br/>enums generated from the data"]
+    B --> C["Feature engineering<br/>one implementation, train and serve"]
+    C --> D["Calibrated PD model<br/>XGBoost + isotonic"]
 
-    D --> E[Probability of default]
-    D --> F[SHAP attribution]
-    E --> G[Risk engine<br/>EL = PD x LGD x EAD]
-    F --> H[Reason codes]
+    D --> E["Probability of default"]
+    D --> F["SHAP attribution"]
+    E --> G["Risk engine<br/>EL = PD x LGD x EAD"]
+    F --> H["Reason codes"]
 
-    E --> I[Risk grade A-G]
-    G --> J{Decision engine<br/><i>break-even PD from economics</i>}
+    E --> I["Risk grade A to G"]
+    G --> J{"Decision engine<br/>break-even PD from economics"}
     I --> J
     H --> J
 
-    J --> K[APPROVE / REVIEW / DECLINE]
-    K --> L[FastAPI response<br/><i>+ structured audit log</i>]
-    L --> M[(Railway)]
+    J --> K["APPROVE / REVIEW / DECLINE"]
+    K --> L["FastAPI response<br/>plus structured audit log"]
+    L --> M[("Railway")]
 
-    style D fill:#2c5282,color:#fff
-    style G fill:#2f6f4e,color:#fff
-    style J fill:#a4303f,color:#fff
+    style D fill:#2c5282,color:#ffffff
+    style G fill:#2f6f4e,color:#ffffff
+    style J fill:#a4303f,color:#ffffff
 ```
 
 ---
@@ -84,7 +84,7 @@ The dataset has a column called `Interest_rate_spread`, blank on about a quarter
 of rows. Those blanks are not random:
 
 ```
-Interest_rate_spread.isna( ==  Status     on 148,670 of 148,670 rows  (100.00%)
+Interest_rate_spread.isna()  ==  Status     on 148,670 of 148,670 rows  (100.00%)
 ```
 
 Every single row. The column is only populated for loans that were actually
@@ -141,7 +141,7 @@ Full write-up: [`docs/LEAKAGE_INVESTIGATION.md`](docs/LEAKAGE_INVESTIGATION.md) 
 | SHA-256 of the training file | `4234b122f463ff4d…` (recorded in model metadata) |
 
 The CSV is not committed — 28MB has no place in a deploy image. A 5,000-row
-sample (`data/portfolio_sample.csv`is committed so the portfolio and stress
+sample (`data/portfolio_sample.csv`) is committed so the portfolio and stress
 endpoints work from a clean clone. See [Local setup](#local-setup) for the full file.
 
 ---
@@ -207,7 +207,7 @@ held-out calibration split and compared on the test set.
 |---|---:|---:|---:|---:|
 | Uncalibrated | 0.09324 | 0.88pp | 3.09pp | 0.8249 |
 | **Isotonic** ✅ | 0.09333 | **0.60pp** | **1.36pp** | 0.8244 |
-| Platt (sigmoid| 0.09382 | 2.36pp | 3.61pp | 0.8249 |
+| Platt (sigmoid) | 0.09382 | 2.36pp | 3.61pp | 0.8249 |
 
 The honest reading: **isotonic is very slightly worse on Brier score and
 marginally worse on AUC.** It was still chosen, because Brier score aggregates
@@ -243,7 +243,7 @@ Instead, a transparent collateral proxy, with every parameter in
 [`config/risk_policy.yaml`](config/risk_policy.yaml):
 
 ```
-recovery  = property_value x (1 - distressed_sale_haircutx (1 - workout_cost_rate)
+recovery  = property_value x (1 - distressed_sale_haircut) x (1 - workout_cost_rate)
 LGD       = clip(1 - recovery / EAD, floor, ceiling)
 ```
 
@@ -468,7 +468,7 @@ Design decisions behind it:
 
 ## Testing and quality
 
-**202 tests, 85% coverage.** The ones worth pointing at:
+**214 tests, 85% coverage.** The ones worth pointing at:
 
 | Test | What it defends |
 |---|---|
@@ -556,7 +556,7 @@ make serve
 Then open http://localhost:8000/docs.
 
 To retrain, download `Loan_Default.csv` from
-[Kaggle](https://www.kaggle.com/datasets/yasserh/loan-default-datasetinto
+[Kaggle](https://www.kaggle.com/datasets/yasserh/loan-default-dataset) into
 `data/`, then:
 
 ```bash
@@ -598,7 +598,7 @@ must not be used for, real lending decisions.
   in the data, so the model describes the through-the-door population that got
   approved, not all applicants. This is survivorship bias and reject inference
   would be needed to address it.
-- **`Credit_Score` is not predictive** in this dataset (univariate AUC 0.503and
+- **`Credit_Score` is not predictive** in this dataset (univariate AUC 0.503) and
   appears to be randomly generated. It is retained for contract completeness only.
 - **The fairness analysis is not a compliance assessment.** Protected attributes
   were excluded as a model-design and fair-lending safeguard. Excluding them does
@@ -624,4 +624,4 @@ must not be used for, real lending decisions.
 **Abubakar Sadiq Muhammad** ·
 [GitHub](https://github.com/sadiqmuhd)
 
-Dataset: [Loan Default Dataset](https://www.kaggle.com/datasets/yasserh/loan-default-dataset(Kaggle, 148,670 mortgage applications).
+Dataset: [Loan Default Dataset](https://www.kaggle.com/datasets/yasserh/loan-default-dataset) (Kaggle, 148,670 mortgage applications).
