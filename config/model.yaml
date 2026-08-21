@@ -21,8 +21,10 @@ exclusions:
     - Interest_rate_spread
     - Upfront_charges
 
-  # Protected characteristics under ECOA / Regulation B. Using these in a credit
-  # decision is unlawful in the US. Measured cost of removal: 4 bp of ROC-AUC.
+  # Protected characteristics. Excluded as a deliberate fair-lending safeguard,
+  # motivated by the principles behind ECOA / Regulation B. This is a design
+  # decision, not a claim of regulatory compliance - that would require legal
+  # review this project has not had. Measured cost of removal: 4.6 bp of ROC-AUC.
   protected:
     - Gender
     - age

@@ -15,8 +15,8 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from credit_risk.api.schemas.requests import LoanApplication
-from credit_risk.data.schema import load_data_contract, model_feature_columns
+from loan_default.api.schemas.requests import LoanApplication
+from loan_default.data.schema import load_data_contract, model_feature_columns
 from tests.conftest import requires_data
 
 SAMPLE_SIZE = 2000

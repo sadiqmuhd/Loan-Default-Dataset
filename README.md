@@ -1,112 +1,105 @@
-# Credit Risk Decisioning Platform
+# Loan Default Prediction
 
-A mortgage credit-risk decisioning service: calibrated **probability of default**,
-**risk grades**, **expected loss** (PD × LGD × EAD), an economically-derived
-**approve / refer / decline** decision, and **SHAP reason codes** — served from a
-versioned FastAPI application deployed on Railway.
+A mortgage loan default prediction system, built as a working API rather than a
+notebook. It takes a loan application and returns the probability the borrower
+defaults, a risk grade, the expected loss in currency terms, an approve /
+review / decline recommendation, and the reasons behind it.
 
-[![CI](https://github.com/your-username/credit-risk-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/credit-risk-platform/actions/workflows/ci.yml)
+Dataset: 148,670 mortgage applications.
+
+[![CI](https://github.com/your-username/loan-default-prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/loan-default-prediction/actions/workflows/ci.yml)
 
 ---
 
-## Headline results
+## Start here: the model used to score 100%
 
-Held-out test set, 24,910 loans, 16.32% base default rate.
+The first working version of this project reported a ROC-AUC of **1.0000**.
+Perfect. Logistic regression, random forest and XGBoost all scored exactly 1.0
+on a held-out test set of 29,734 loans, with a confusion matrix that had zeros
+off the diagonal.
+
+That is not a good model. It is a broken one, and finding out why is the most
+useful thing in this repository.
+
+The dataset has a column called `Interest_rate_spread`, which is blank for about
+a quarter of the rows. It turns out those blanks are not random:
+
+```
+Interest_rate_spread.isna()  ==  Status     on 148,670 of 148,670 rows
+```
+
+Every single row. The column is only populated for loans that were actually
+originated and priced, so its absence is a consequence of the loan defaulting,
+not a predictor of it. The original feature engineering built a
+`_missing` indicator from that column and handed it to the model, which is to
+say it handed the model the answer.
+
+Two of those indicators carried **97.5% of the model's feature importance**.
+Eighty-two of the eighty-seven features had importance of exactly zero —
+including credit score, LTV, debt-to-income and income. It was not a credit
+model. It was a lookup table on one NaN pattern.
+
+Removing the leakage properly (there is a second, subtler layer of it) gives a
+model that scores **0.8244**. That is the honest number this project reports,
+and the full investigation is in
+[docs/LEAKAGE_INVESTIGATION.md](docs/LEAKAGE_INVESTIGATION.md).
+
+Training now refuses to save a model that scores above 0.95, and there is a test
+that fails the build if one appears.
+
+---
+
+## Results
+
+Held-out test set of 24,910 loans, 16.32% default rate.
 
 | Metric | Value |
 |---|---|
-| **ROC-AUC** | **0.8244** (95% CI 0.8166–0.8320) |
-| **Gini** | 0.6489 |
-| **PR-AUC** | **0.6104** vs 0.1632 baseline — **3.7× lift** |
-| **KS** | 0.4892 |
+| ROC-AUC | 0.8244 (95% CI 0.8166–0.8320) |
+| Gini | 0.6489 |
+| PR-AUC | 0.6104, against a 0.1632 baseline |
+| KS | 0.4892 |
 | Brier score | 0.0933 |
-| Max calibration error | 0.0136 (from 0.0309 uncalibrated) |
-| Cost of excluding protected attributes | **4.6 bps of AUC** |
+| Max calibration error | 0.0136 |
 
-Observed default rate is monotonic across risk grades — 0.00% at grade A to
-82.06% at grade G.
+Risk grades rank-order correctly, which is the thing that actually matters if
+you intend to lend against them:
 
-> **This project began by scoring ROC-AUC 1.0000.** That was target leakage, not
-> performance. The investigation into it is written up in
-> **[docs/LEAKAGE_INVESTIGATION.md](docs/LEAKAGE_INVESTIGATION.md)** and is the
-> most interesting thing in this repository.
+| Grade | Loans | Mean predicted PD | Observed default rate |
+|---|---|---|---|
+| A | 88 | 1.44% | 0.00% |
+| B | 5,898 | 3.48% | 3.42% |
+| C | 5,961 | 6.79% | 5.89% |
+| D | 8,318 | 13.21% | 13.54% |
+| E | 1,784 | 26.50% | 26.18% |
+| F | 1,077 | 43.38% | 42.34% |
+| G | 1,784 | 82.43% | 82.06% |
 
----
+Predicted and observed track each other closely all the way up. That is
+calibration, and it is what lets the PD be multiplied by an exposure to get a
+loss figure in pounds rather than just used as a ranking.
 
-## What is modelled, and what is assumed
-
-| Component | Status | Basis |
-|---|---|---|
-| **PD** | **Modelled** | XGBoost on 124,547 loans, isotonically calibrated |
-| **LGD** | **Assumed** | Collateral proxy under stated haircuts — *not an estimated model* |
-| **EAD** | **Assumed** | Origination amount (fully-drawn term loan; CCF not applicable) |
-| **EL** | **Derived** | PD × LGD × EAD |
-
-The dataset has no recovery cash flows, workout costs or balance history, so LGD
-and EAD **cannot** be estimated from it. They are derived under assumptions held
-in [`config/risk_policy.yaml`](config/risk_policy.yaml) and echoed in the
-`assumptions` block of every response that quotes a loss figure. See
-[MODEL_CARD.md](MODEL_CARD.md).
+Full breakdown, including performance by region and loan purpose, is in
+[reports/validation_report.md](reports/validation_report.md).
 
 ---
 
-## Architecture
-
-```
-GitHub ──push──► Railway (Nixpacks) ──► Python 3.11 ──► FastAPI ──► PD model
-                                                                      │
-   config/*.yaml ─── feature contract, credit policy, scenarios ──────┤
-   artifacts/    ─── versioned model + metadata + accepted metrics ───┘
-```
-
-```
-src/credit_risk/
-├── config.py            Settings (env) + YAML policy loaders
-├── data/
-│   ├── schema.py        Pandera contract — single source of truth
-│   ├── loader.py        Load, hash, apply leakage controls
-├── features/
-│   └── engineering.py   ONE implementation, used by training and serving
-├── models/
-│   ├── train.py         CV → select → calibrate → evaluate → register
-│   ├── evaluate.py      AUC / PR-AUC / Brier / KS / calibration / bootstrap CIs
-│   ├── explain.py       SHAP → reason codes
-│   └── registry.py      Versioned artifacts with full provenance
-├── risk/
-│   ├── grades.py        PD → risk grade
-│   ├── expected_loss.py LGD proxy, EAD, EL
-│   ├── policy.py        Economically-derived decision cut-off
-│   ├── portfolio.py     Aggregation, concentration (HHI)
-│   └── stress.py        Scenario and sensitivity analysis
-├── monitoring/drift.py  PSI, prediction drift, calibration drift
-└── api/                 Routers, DI, middleware, error handlers
-```
-
----
-
-## API
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/v1/risk/assess` | Assess one application |
-| `POST` | `/v1/risk/batch` | Score a batch, with portfolio aggregates |
-| `GET` | `/v1/model/metadata` | Version, data hash, feature contract, limitations |
-| `GET` | `/v1/model/metrics` | Accepted performance metrics |
-| `GET` | `/v1/model/policy` | Grade scale and active assumptions |
-| `POST` | `/v1/portfolio/stress-test` | Scenario analysis with grade migration |
-| `GET` | `/v1/portfolio/summary` | Exposure, EL and concentration |
-| `GET` | `/health/live` | Liveness — process is up |
-| `GET` | `/health/ready` | Readiness — model loaded **and** canary scored |
-
-Interactive docs at `/docs`.
-
-### Example
+## Try it
 
 ```bash
-curl -X POST http://localhost:8000/v1/risk/assess \
-  -H 'Content-Type: application/json' \
-  -d @tests/fixtures/example_application.json
+git clone https://github.com/your-username/loan-default-prediction.git
+cd loan-default-prediction
+make install
+make serve
 ```
+
+Then open <http://localhost:8000/docs> and hit `POST /v1/risk/assess` with the
+example payload that is already filled in.
+
+The trained model is committed to the repository, so this works immediately.
+You do not need the dataset and you do not need to train anything.
+
+A request looks like a loan application. The response looks like this:
 
 ```json
 {
@@ -114,8 +107,11 @@ curl -X POST http://localhost:8000/v1/risk/assess \
   "risk_grade": "C",
   "grade_description": "Modest risk",
   "loss": {
-    "pd": 0.0578, "lgd": 0.100, "ead": 296500.0,
-    "expected_loss": 1713.57, "lgd_method": "collateral_proxy"
+    "pd": 0.0578,
+    "lgd": 0.100,
+    "ead": 296500.0,
+    "expected_loss": 1713.57,
+    "lgd_method": "collateral_proxy"
   },
   "decision": {
     "decision": "APPROVE",
@@ -124,31 +120,60 @@ curl -X POST http://localhost:8000/v1/risk/assess \
   },
   "explanation": {
     "risk_drivers": [
-      {"label": "Application channel", "contribution": 0.2079, "value": "to_inst"},
-      {"label": "Loan purpose", "contribution": 0.1189, "value": "p3"}
+      {"label": "Application channel", "value": "to_inst", "contribution": 0.2079},
+      {"label": "Loan purpose", "value": "p3", "contribution": 0.1189}
     ],
     "risk_reducers": [
-      {"label": "Loan-to-value ratio", "contribution": -0.5478, "value": 70.9},
-      {"label": "Debt-to-income ratio", "contribution": -0.3811, "value": 39.0}
+      {"label": "Loan-to-value ratio", "value": 70.9, "contribution": -0.5478},
+      {"label": "Debt-to-income ratio", "value": 39.0, "contribution": -0.3811}
     ]
   },
-  "model_version": "v20260820T235355Z",
+  "model_version": "v20260821T011832Z",
+  "assumptions_version": "1.0.0",
   "request_id": "3f8a1c2e-5b7d-4a91-8e6f-1d2c3b4a5e6f"
 }
 ```
 
-### The decision threshold is derived, not chosen
+---
 
-Rather than hardcoded probability bands, the cut-off solves for the PD at which
-expected margin equals expected loss:
+## How the decision gets made
+
+The model produces a probability of default. Turning that into a lending
+decision takes three more steps, and each one is an assumption I had to make
+explicit rather than a number I could estimate from the data.
+
+**Exposure at default** is the loan amount. These are fully-drawn term loans
+being scored at origination, so there is no undrawn commitment to convert and
+credit conversion factor modelling does not apply.
+
+**Loss given default** is a collateral proxy, not a model. The dataset has no
+recovery cash flows, no workout costs and no resolution times, so an LGD model
+cannot be fitted from it — claiming otherwise would be inventing a capability.
+What it does have is property values, and 99.98% of the book is secured on
+residential property. So:
+
+```
+LGD = clip(1 − property_value × (1 − haircut) × (1 − costs) / EAD, floor, 1)
+```
+
+with a 25% distressed-sale haircut, 10% workout costs and a 10% floor. Those
+three numbers live in [config/risk_policy.yaml](config/risk_policy.yaml) and are
+returned with every response, so nobody has to guess what the loss figure rests
+on.
+
+**Expected loss** is then just `PD × LGD × EAD`.
+
+**The approve/decline threshold** is derived rather than picked. It solves for
+the PD at which expected margin equals expected loss:
 
 ```
 (1 − PD) · EAD · margin · life  =  PD · LGD · EAD
 ⇒  PD* = revenue_rate / (LGD + revenue_rate)
 ```
 
-Because it depends on LGD, a well-collateralised borrower is tolerated at a
-higher PD — which falls out of the arithmetic rather than being coded:
+Because it depends on LGD, a well-secured borrower is tolerated at a much higher
+PD than a thinly-secured one, which falls out of the arithmetic rather than
+being coded as a rule:
 
 | LGD | Break-even PD |
 |---|---|
@@ -157,75 +182,115 @@ higher PD — which falls out of the arithmetic rather than being coded:
 | 0.45 | 23.7% |
 | 1.00 | 12.3% |
 
+The earlier version of this project used hardcoded bands of 0.3 and 0.6 with no
+stated reason. This is the same idea with the reasoning put back in.
+
 ---
 
 ## Fair lending
 
-`Gender` and `age` are excluded from the model under **ECOA / Regulation B**, and
-the API **refuses to accept them at all** — the request schema rejects them, so
-the service cannot receive a protected characteristic even by accident.
+Gender and age are not model inputs, and the API will not accept them — send
+either field and the request is rejected. The service cannot use what it never
+receives, which is a stronger position than filtering after the fact.
 
-Measured cost of exclusion: **4.6 basis points of ROC-AUC** (0.8258 → 0.8253).
+This costs **4.6 basis points of ROC-AUC** (0.8258 with them, 0.8253 without).
+I measured it rather than assuming it, because "we removed it and performance
+was fine" is a claim someone will ask you to back up.
 
-Outcomes are still measured across groups, since exclusion does not preclude
-disparate impact via proxies. No group falls below the four-fifths threshold
-(lowest adverse impact ratio 0.859). Run `make report`.
+Excluding the fields is not the end of it, since a model can still produce
+uneven outcomes through correlated proxies. Approval rates by group are measured
+in [reports/fairness_analysis.md](reports/fairness_analysis.md); the lowest
+adverse impact ratio is 0.859, above the four-fifths threshold conventionally
+used as a review trigger.
 
----
+Region *is* a model input, and coarse geography is a plausible proxy. It is kept
+because the levels here are very broad and it carries real signal, but it is
+flagged and monitored rather than waved through.
 
-## Quick start
-
-```bash
-git clone https://github.com/your-username/credit-risk-platform.git
-cd credit-risk-platform
-make install
-make serve
-```
-
-Open http://localhost:8000/docs
-
-The trained model is committed under `artifacts/`, so the API runs immediately
-after install — no training step required.
-
-### Retraining
-
-The full 148,670-row dataset is **not** in version control (28MB). Place
-`Loan_Default.csv` in `data/`, then:
-
-```bash
-make contract   # regenerate the data contract from the dataset
-make train      # cross-validate, select, calibrate, register a new version
-```
-
-A committed 5,000-row stratified sample (`data/portfolio_sample.csv`) backs the
-portfolio and stress endpoints so a fresh deploy works without the full file.
+To be clear: this is a design decision motivated by fair-lending principles. It
+is not a claim of regulatory compliance, which would need legal review this
+project has not had.
 
 ---
 
-## Deployment (Railway)
+## What's in here
 
 ```
-GitHub Repository → Railway → Python 3.11 → FastAPI → Credit Risk Model
+src/loan_default/
+  data/          contract, loading, quality profiling
+  features/      one feature engineering implementation, shared by train and serve
+  models/        training, evaluation, calibration, SHAP, segments, registry
+  risk/          grades, LGD/EAD/EL, decision policy, portfolio, stress
+  monitoring/    PSI and calibration drift
+  api/           routers, dependencies, middleware, error handlers
+config/          feature contract, credit policy, stress scenarios
+tests/           unit, api, model, integration
+notebooks/       EDA, leakage investigation, model development
+reports/         generated validation, fairness and calibration output
+artifacts/       versioned model, metadata and accepted metrics
 ```
 
-1. Create a Railway project from this GitHub repository.
-2. Railway builds using [`nixpacks.toml`](nixpacks.toml): pinned deps from
-   `requirements.txt`, then the package itself.
-3. It starts the app from [`railway.toml`](railway.toml):
-   `uvicorn credit_risk.api.main:app --host 0.0.0.0 --port $PORT`
-4. Traffic is routed only once `/health/ready` returns 200 — which requires the
-   model to be loaded **and** to have scored a canary record.
+The three YAML files in `config/` are worth a look. Every assumption that could
+change a lending decision is in them rather than buried in code, which makes
+them reviewable by someone who does not read Python.
 
-No further configuration is required; all settings have working defaults.
-Optional overrides (prefix `CREDIT_RISK_`):
+### The API
 
-| Variable | Default | Purpose |
+| Method | Endpoint | |
 |---|---|---|
-| `CREDIT_RISK_LOG_LEVEL` | `INFO` | Log verbosity |
-| `CREDIT_RISK_JSON_LOGS` | `true` | Structured JSON logging |
-| `CREDIT_RISK_MODEL_VERSION` | `latest` | Pin a specific artifact |
-| `CREDIT_RISK_CORS_ORIGINS` | localhost | Comma-separated allowed origins |
-| `CREDIT_RISK_MAX_BATCH_SIZE` | `1000` | Batch endpoint limit |
+| POST | `/v1/risk/assess` | Score one application |
+| POST | `/v1/risk/batch` | Score many, with portfolio aggregates |
+| GET | `/v1/model/metadata` | Version, data hash, features, limitations |
+| GET | `/v1/model/metrics` | Accepted performance metrics |
+| GET | `/v1/model/policy` | Grade scale and active assumptions |
+| POST | `/v1/portfolio/stress-test` | Scenario analysis |
+| GET | `/v1/portfolio/summary` | Exposure, expected loss, concentration |
+| GET | `/health/live` | Process is up |
+| GET | `/health/ready` | Model loaded and scoring |
+
+Readiness actually scores a canary record at startup. Checking that a file
+exists on disk tells you nothing about whether it loads.
+
+Batch scoring validates row by row. One malformed application in a file of five
+thousand returns an error for that row and scores the rest, which is the
+behaviour you want at 2am when a nightly job hits a bad record.
+
+---
+
+## Stress testing
+
+```bash
+curl -X POST http://localhost:8000/v1/portfolio/stress-test \
+  -H 'Content-Type: application/json' \
+  -d '{"sample_size": 5000}'
+```
+
+Three scenarios, defined in
+[config/stress_scenarios.yaml](config/stress_scenarios.yaml). Income falls,
+debt burden rises, property values drop. A property shock recomputes LTV, so it
+raises PD and the collateral LGD together, which is the channel that matters in
+a mortgage book.
+
+This is sensitivity analysis under stated assumptions. It is **not** CCAR or
+DFAST and I have not called it that anywhere. The dataset has no macroeconomic
+variables and no time dimension at all — `year` is 2019 for every row — so there
+is nothing to condition a macro path on.
+
+More importantly, the results come with a confidence rating, because the
+headline numbers are large and should not be taken at face value:
+
+| Scenario | Weighted PD | Change in EL | Book outside observed range | Confidence |
+|---|---|---|---|---|
+| Base | 0.1478 | — | 0.9% | High |
+| Moderate | 0.5218 | +509% | 23.1% | Low |
+| Severe | 0.8262 | +1175% | 58.7% | Low |
+
+The reason the moderate scenario looks so violent is worth understanding. A 25%
+income shock only moves mean PD by a factor of 1.24. A 15% *property* shock
+moves it by 2.64, because it drives LTV up — and the training data contained
+only 1.2% of loans above 100% LTV. A modest-sounding house price fall pushes a
+quarter of the book into a region the model has barely seen. So the model
+extrapolates, and the endpoint says so rather than quietly reporting a number.
 
 ---
 
@@ -235,84 +300,82 @@ Optional overrides (prefix `CREDIT_RISK_`):
 make test
 ```
 
-**128 tests** across unit, API, model-validation and integration tiers. The ones
-that matter most:
+180 tests, 85% coverage. The ones that earn their place:
 
-| Test | Guards against |
+| Test | What it stops |
 |---|---|
-| `test_no_leakage.py` | **Fails the build if test AUC > 0.95** |
-| `test_schema_roundtrip.py` | Real dataset rows must validate against the API contract |
-| `test_train_serve_parity.py` | Training and serving paths must agree to 1e-12 |
-| `test_grades_and_stress.py` | Grade monotonicity; shocks must move risk correctly |
-| `test_dependency_pins.py` | Deployed environment must match the tested one |
+| `test_no_leakage.py` | Fails the build if test AUC exceeds 0.95 |
+| `test_schema_roundtrip.py` | Real dataset rows must validate against the API |
+| `test_train_serve_parity.py` | Training and serving must agree to 1e-12 |
+| `test_training.py` | Two runs with the same seed produce identical metrics |
+| `test_grades_and_stress.py` | Grade monotonicity; shocks move risk the right way |
+| `test_data_quality.py` | Duplicate IDs, impossible values, leaky missingness |
 
-CI runs lint → tests → a deploy smoke test that installs exactly what Railway
-installs, boots the app with the Railway start command, and scores a live
-request.
+The schema test exists because the earlier API rejected 148,111 of the 148,670
+records it was trained on — 99.6% — while accepting eleven category values that
+appear nowhere in the data. The request schema is now generated from the dataset
+rather than typed by hand, and the test checks that real rows still pass.
+
+CI runs lint, mypy, the test suite, and a deploy smoke test that installs
+exactly what Railway installs and scores a live request.
 
 ---
 
-## Stress testing
+## Deployment
 
-```bash
-curl -X POST http://localhost:8000/v1/portfolio/stress-test \
-  -H 'Content-Type: application/json' \
-  -d '{"sample_size": 5000, "include_sensitivity": true}'
+```
+GitHub → Railway → Python 3.11 → FastAPI → model
 ```
 
-Scenarios live in [`config/stress_scenarios.yaml`](config/stress_scenarios.yaml).
-A property-value shock recomputes LTV, so it raises PD *and* the collateral LGD
-together — the mechanism that matters in a mortgage book.
+Push to GitHub, point Railway at the repo, and it builds from
+[nixpacks.toml](nixpacks.toml) and starts the app from
+[railway.toml](railway.toml). Traffic is only routed once `/health/ready`
+returns 200, so a deploy with a broken artifact fails the health check instead
+of serving 500s to users.
 
-**This is assumption-driven sensitivity analysis, not a macro-conditioned
-forecast, and it is not CCAR or DFAST.** The dataset has no macroeconomic
-variables and no time dimension, so PD cannot be conditioned on a macro path.
-Interest-rate shocks are unavailable because the rate variables are excluded as
-leakage.
-
-Every scenario reports its own reliability, because the headline numbers are
-large and should not be taken at face value:
-
-| Scenario | Weighted PD | ΔEL | Book outside observed range | Confidence |
-|---|---|---|---|---|
-| Base | 0.1478 | — | 0.9% | **High** |
-| Moderate | 0.5218 | +509% | 23.1% | **Low** |
-| Severe | 0.8262 | +1175% | 58.7% | **Low** |
-
-Decomposing the severe scenario: an income shock of −25% raises mean PD only
-1.24×, but a property shock of −15% raises it 2.64×. The collateral channel
-dominates because it drives LTV — and **the training data contained only 1.2% of
-loans above LTV 100** (p99 = 102.4), while a −15% shock puts 22.6% of the book
-there. The model is extrapolating into a region it barely saw, so those losses
-indicate *direction*, not magnitude. That is what the `extrapolation` block on
-each scenario measures.
+No environment variables are required; everything has a working default. Full
+walkthrough in [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md).
 
 ---
 
-## Known limitations
+## Limitations
 
-Stated plainly, in full, in [MODEL_CARD.md](MODEL_CARD.md):
+Written out properly in [MODEL_CARD.md](MODEL_CARD.md). The ones that matter
+most:
 
-- **`Credit_Score` is not predictive** (univariate AUC 0.5030, flat across all
-  deciles) and appears to be randomly generated in this dataset.
-- **No time dimension** — `year` is 2019 for all rows, so no out-of-time
-  validation, vintage analysis or macro conditioning is possible.
-- **Complete-case bias** — the 16.2% of rows dropped are not missing at random.
-- **LGD and EAD are assumptions, not models.**
-- This is a portfolio project. It has not been through model validation or
-  fair-lending legal review, and is **not approved for real lending decisions**.
+**Credit score is noise in this dataset.** Univariate AUC of 0.5030, with a flat
+default rate across all ten deciles. In real bureau data this would be the
+single strongest predictor. Here it appears to be randomly generated, and its
+range (500–900) is not FICO's. Do not read anything into its SHAP value. There
+is a test asserting this stays true, so if the data changes the model card gets
+revisited.
+
+**Only originated loans are in the data.** Everyone the original lender declined
+is missing, so the model is trained on an accepted population but would score
+the full through-the-door population. Correcting for that properly needs
+reject-inference data this dataset does not contain.
+
+**Complete-case training.** 16.2% of rows are dropped because their missingness
+was itself predictive. Those rows are not missing at random, so the model is
+calibrated to a 16.3% default rate population rather than the full book's 24.6%.
+
+**No time dimension**, so no out-of-time validation, no vintage analysis, and no
+real production drift to observe. The drift detectors are demonstrated against a
+deliberately perturbed sample, clearly labelled as a simulation.
+
+**Grade A is thin** — 88 loans, zero observed defaults. Zero defaults out of 88
+supports no PD estimate worth quoting.
+
+This is a portfolio project. It has not been through model validation or
+fair-lending review and is not fit for real lending decisions.
 
 ---
 
-## Tech stack
+## Built with
 
-Python 3.11 · FastAPI · Pydantic v2 · Pandera · scikit-learn · XGBoost · SHAP ·
-pytest · Ruff · GitHub Actions · Railway
+Python 3.11, FastAPI, Pydantic, Pandera, scikit-learn, XGBoost, SHAP, pytest,
+Ruff, mypy, GitHub Actions, Railway.
 
-## Licence
-
-MIT — see [LICENSE](LICENSE).
-
-## Author
+MIT licensed. See [LICENSE](LICENSE).
 
 **Abubakar Sadiq Muhammad**

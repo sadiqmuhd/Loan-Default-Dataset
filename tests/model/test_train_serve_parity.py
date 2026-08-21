@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from credit_risk.data.loader import load_dataset
+from loan_default.data.loader import load_dataset
 from tests.conftest import requires_data, requires_model
 
 pytestmark = [requires_model, requires_data]

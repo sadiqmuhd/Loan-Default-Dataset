@@ -2,7 +2,7 @@
 #
 # The default Python provider installs requirements.txt but would not install
 # THIS project, whose package lives under src/. Without that final step
-# `uvicorn credit_risk.api.main:app` cannot import the application. The install
+# `uvicorn loan_default.api.main:app` cannot import the application. The install
 # phase is therefore made explicit.
 
 providers = ["python"]
@@ -22,4 +22,4 @@ cmds = [
 ]
 
 [start]
-cmd = "uvicorn credit_risk.api.main:app --host 0.0.0.0 --port $PORT --workers 2"
+cmd = "uvicorn loan_default.api.main:app --host 0.0.0.0 --port $PORT --workers 2"

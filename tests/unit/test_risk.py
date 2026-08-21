@@ -5,16 +5,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from credit_risk.config import load_risk_policy
-from credit_risk.risk.expected_loss import (
+from loan_default.config import load_risk_policy
+from loan_default.risk.expected_loss import (
     compute_loss_components,
     expected_loss,
     exposure_at_default,
     loss_given_default,
 )
-from credit_risk.risk.grades import assign_grade, assign_grades, grade_scale
-from credit_risk.risk.policy import Decision, break_even_pd, decide, revenue_rate
-from credit_risk.risk.portfolio import herfindahl_index
+from loan_default.risk.grades import assign_grade, assign_grades, grade_scale
+from loan_default.risk.policy import Decision, break_even_pd, decide, revenue_rate
+from loan_default.risk.portfolio import herfindahl_index
 
 POLICY = load_risk_policy()
 
@@ -152,11 +152,11 @@ def test_high_risk_application_is_declined():
     assert result.decision is Decision.DECLINE
 
 
-def test_borderline_application_is_referred():
+def test_borderline_application_is_reviewed():
     """Within the review band around break-even, a human decides."""
     lgd = 0.25
     result = decide(break_even_pd(lgd, POLICY), lgd, 200_000.0, POLICY)
-    assert result.decision is Decision.REFER
+    assert result.decision is Decision.REVIEW
 
 
 def test_worst_grade_is_declined_regardless_of_economics():

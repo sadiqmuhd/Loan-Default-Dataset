@@ -7,16 +7,16 @@ import pandas as pd
 import pytest
 from sklearn.model_selection import train_test_split
 
-from credit_risk.config import load_stress_scenarios
-from credit_risk.data.loader import load_dataset
-from credit_risk.monitoring.drift import (
+from loan_default.config import load_stress_scenarios
+from loan_default.data.loader import load_dataset
+from loan_default.monitoring.drift import (
     calibration_drift,
     feature_drift,
     population_stability_index,
     prediction_drift,
 )
-from credit_risk.risk import stress
-from credit_risk.risk.grades import grade_summary, is_monotonic
+from loan_default.risk import stress
+from loan_default.risk.grades import grade_summary, is_monotonic
 from tests.conftest import requires_data, requires_model
 
 pytestmark = [requires_model, requires_data]

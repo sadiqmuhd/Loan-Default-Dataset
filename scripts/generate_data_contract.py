@@ -26,7 +26,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from credit_risk.config import CONFIG_DIR, PROJECT_ROOT  # noqa: E402
+from loan_default.config import CONFIG_DIR, PROJECT_ROOT  # noqa: E402
 
 # Domain-set numeric bounds. Values outside these are data errors, not applicants.
 NUMERIC_BOUNDS: dict[str, tuple[float, float]] = {

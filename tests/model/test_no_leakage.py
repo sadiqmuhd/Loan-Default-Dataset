@@ -15,9 +15,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from credit_risk.config import excluded_columns
-from credit_risk.data.loader import load_dataset
-from credit_risk.features.engineering import add_features
+from loan_default.config import excluded_columns
+from loan_default.data.loader import load_dataset
+from loan_default.features.engineering import add_features
 from tests.conftest import requires_data, requires_model
 
 # Columns whose missingness encodes the outcome.
@@ -105,7 +105,7 @@ def test_no_single_feature_dominates(loaded_model):
     """In the original model two leakage indicators held 97.5% of importance and
     82 of 87 features had exactly zero importance. Genuine signal is distributed.
     """
-    from credit_risk.models.explain import PredictionExplainer
+    from loan_default.models.explain import PredictionExplainer
 
     model, metadata, _ = loaded_model
     explainer = PredictionExplainer(model)
