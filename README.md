@@ -1,4 +1,4 @@
-ÿþ# Loan Default Prediction
+# Loan Default Prediction
 
 An end-to-end credit-risk ML system that estimates probability of default, assigns
 borrower risk grades, calculates expected credit loss, explains lending decisions,
@@ -6,7 +6,7 @@ and exposes the model through a production FastAPI service.
 
 [![CI](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
-![Tests](https://img.shields.io/badge/tests-198%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-202%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)
 ![Model](https://img.shields.io/badge/held--out%20ROC--AUC-0.824-informational)
 
@@ -468,7 +468,7 @@ Design decisions behind it:
 
 ## Testing and quality
 
-**198 tests, 85% coverage.** The ones worth pointing at:
+**202 tests, 85% coverage.** The ones worth pointing at:
 
 | Test | What it defends |
 |---|---|

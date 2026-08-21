@@ -10,6 +10,46 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
+  encoding:
+    name: Encoding gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Runs before any install. A byte order mark on README.md breaks
+      # `pip install -e .` itself, because pyproject reads it as long_description,
+      # so every other job would fail with an opaque setuptools traceback instead
+      # of naming the real problem. No dependencies needed to catch it.
+      - name: Reject byte order marks and non-UTF-8 text
+        run: |
+          python - <<'EOF'
+          import pathlib, sys
+          BOMS = {b"ÿþ": "UTF-16 LE", b"þÿ": "UTF-16 BE", b"ï»¿": "UTF-8 BOM"}
+          SUFFIXES = {".md",".py",".yaml",".yml",".toml",".txt",".json",".cfg",".ini",".example"}
+          SKIP = {".git","venv",".venv","__pycache__","node_modules","data"}
+          bad = []
+          for path in pathlib.Path(".").rglob("*"):
+              if not path.is_file() or any(s in path.parts for s in SKIP):
+                  continue
+              if path.suffix not in SUFFIXES and path.name not in {"Makefile","Procfile"}:
+                  continue
+              raw = path.read_bytes()
+              for bom, name in BOMS.items():
+                  if raw.startswith(bom):
+                      bad.append(f"{path}: starts with a {name} byte order mark")
+                      break
+              else:
+                  try:
+                      raw.decode("utf-8")
+                  except UnicodeDecodeError as exc:
+                      bad.append(f"{path}: not valid UTF-8 ({exc})")
+          if bad:
+              print("Encoding problems found:")
+              for line in bad:
+                  print("  " + line)
+              sys.exit(1)
+          print("All text files are clean UTF-8 with no BOM.")
+          EOF
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
