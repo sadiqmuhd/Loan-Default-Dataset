@@ -1,0 +1,68 @@
+# Credit policy parameters.
+#
+# EVERY NUMBER IN THIS FILE IS AN ASSUMPTION, NOT AN ESTIMATE.
+# The dataset contains no recovery cash flows, no workout costs, no
+# time-to-resolution and no balance history, so LGD and EAD cannot be modelled
+# from it. They are derived here from collateral values under stated haircuts.
+# This file exists so that those assumptions are auditable and changeable
+# without touching code. See MODEL_CARD.md for the full limitations section.
+
+# ---------------------------------------------------------------------------
+# Risk grade master scale. Boundaries are upper bounds on calibrated PD.
+# Grades are a policy choice, not a model output; they are calibrated to this
+# portfolio's PD distribution and are not comparable to any external scale.
+# ---------------------------------------------------------------------------
+grades:
+  - {grade: A, max_pd: 0.02, description: "Minimal risk"}
+  - {grade: B, max_pd: 0.05, description: "Low risk"}
+  - {grade: C, max_pd: 0.10, description: "Modest risk"}
+  - {grade: D, max_pd: 0.20, description: "Average risk"}
+  - {grade: E, max_pd: 0.35, description: "Elevated risk"}
+  - {grade: F, max_pd: 0.60, description: "High risk"}
+  - {grade: G, max_pd: 1.01, description: "Severe risk"}
+
+# ---------------------------------------------------------------------------
+# Loss Given Default - COLLATERAL PROXY, NOT A MODEL.
+#
+#   LGD = clip(1 - (property_value * (1 - haircut) * (1 - cost)) / EAD, floor, 1)
+#
+# Justification for a collateral-based approach: 99.98% of loans in this book
+# are secured on residential property (Secured_by == "home"), so recovery is
+# dominated by collateral value. This is standard practice for mortgage LGD
+# where workout data is unavailable.
+# ---------------------------------------------------------------------------
+lgd:
+  distressed_sale_haircut: 0.25   # forced-sale discount to market value
+  workout_cost_rate: 0.10         # foreclosure, legal, carrying costs, as % of collateral
+  floor: 0.10                     # regulatory-style downturn floor
+  ceiling: 1.00
+  fallback_lgd: 0.45              # used when property_value is unavailable
+
+# ---------------------------------------------------------------------------
+# Exposure at Default.
+# These are fully-drawn term loans scored at origination, so EAD equals the
+# origination amount. Credit Conversion Factor modelling is NOT applicable
+# here - there is no undrawn commitment and no balance history in the data.
+# ---------------------------------------------------------------------------
+ead:
+  method: at_origination          # at_origination | amortised
+  utilisation: 1.0
+
+# ---------------------------------------------------------------------------
+# Decision policy. The approve/decline cut-off is derived economically rather
+# than chosen, by solving for the PD at which expected margin equals expected
+# loss:
+#     (1 - PD) * EAD * margin * life  ==  PD * LGD * EAD
+# The resulting break-even PD is computed at runtime; the values below are the
+# economic inputs to that calculation.
+# ---------------------------------------------------------------------------
+economics:
+  annual_net_margin: 0.02         # 200 bps net interest margin over funding
+  expected_life_years: 7.0        # average realised life of a 30y mortgage after prepayment
+  loss_aversion_multiplier: 1.0   # >1 makes the policy more conservative than break-even
+
+decision:
+  # Applications within this band of the break-even PD go to a human underwriter
+  # instead of being auto-decided.
+  manual_review_margin: 0.05
+  hard_decline_grade: G           # auto-decline regardless of economics

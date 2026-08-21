@@ -1,0 +1,59 @@
+# Portfolio stress scenarios.
+#
+# THESE ARE ASSUMPTION-DRIVEN SENSITIVITIES, NOT MACRO-CONDITIONED FORECASTS.
+#
+# This is deliberately NOT called CCAR or DFAST. Those are supervisor-prescribed
+# macroeconomic scenarios applied to models estimated on multi-year panel data.
+# This dataset has:
+#   - no macroeconomic variables
+#   - no time dimension whatsoever (`year` == 2019 for all 148,670 rows)
+# so there is no basis for conditioning PD on a macro path. What we can do
+# honestly is shock borrower and collateral inputs and re-score through the
+# model, which measures the model's SENSITIVITY to those inputs.
+#
+# Known limitation: the model was fitted on a single cross-section, so its
+# response to a 25% income shock is an extrapolation beyond the training
+# distribution. Results indicate direction and rough magnitude, not a forecast.
+#
+# Interest rate shocks are NOT available: rate_of_interest and
+# Interest_rate_spread are excluded from the model as target leakage, so the
+# model has no rate sensitivity to stress. Claiming otherwise would be fiction.
+
+scenarios:
+  - name: base
+    label: "Base case"
+    description: "Observed portfolio, no shocks applied."
+    shocks: {}
+
+  - name: moderate
+    label: "Moderate stress"
+    description: >
+      Mild recession: household income falls, debt service burden rises, and
+      residential property values decline modestly. The property shock feeds
+      through to LTV (a model input) and to the collateral LGD proxy.
+    shocks:
+      income: -0.10             # relative change
+      property_value: -0.15
+      dtir1: +0.15
+
+  - name: severe
+    label: "Severe stress"
+    description: >
+      Deep recession with a housing correction. Income and collateral shocks are
+      large enough that a material share of the book moves underwater
+      (LTV > 100), which raises PD and LGD simultaneously.
+    shocks:
+      income: -0.25
+      property_value: -0.30
+      dtir1: +0.35
+
+# Applied after shocking: LTV is recomputed from the shocked property value
+# rather than shocked independently, so the collateral channel stays internally
+# consistent across PD and LGD.
+recompute_ltv_from_property_value: true
+
+# Sensitivity analysis: single-variable sweeps, used to produce tornado charts.
+sensitivity:
+  income: [-0.30, -0.20, -0.10, 0.0, 0.10]
+  property_value: [-0.40, -0.30, -0.20, -0.10, 0.0]
+  dtir1: [0.0, 0.10, 0.20, 0.30, 0.40]

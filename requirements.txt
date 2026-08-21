@@ -1,7 +1,21 @@
-fastapi
-uvicorn
-pandas
-numpy
-scikit-learn
-xgboost
-pydantic
+# Runtime dependencies for the Railway (Nixpacks) build.
+#
+# These pins are the SAME as [project.dependencies] in pyproject.toml, which
+# remains the source of truth. tests/unit/test_dependency_pins.py asserts the
+# two files agree, so they cannot drift.
+#
+# Dev/test dependencies are deliberately absent: they are not installed in the
+# deployed environment.
+
+fastapi==0.134.0
+uvicorn[standard]==0.51.0
+pandas==3.0.1
+numpy==2.4.2
+scikit-learn==1.8.0
+xgboost==3.2.0
+pydantic==2.12.5
+pydantic-settings==2.14.2
+pandera==0.32.1
+shap==0.51.0
+pyyaml==6.0.3
+joblib==1.5.3
