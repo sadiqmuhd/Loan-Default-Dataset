@@ -1,0 +1,128 @@
+{
+  "model_version": "v20260821T011832Z",
+  "model_type": "xgboost",
+  "trained_at": "2026-08-21T01:18:32.311655+00:00",
+  "training_duration_seconds": 199.62,
+  "data_sha256": "4234b122f463ff4d563de600ade5ec347a9ab8f02cfc204535f7c0d4929bfe70",
+  "data_source": "C:\\Users\\user\\Desktop\\E-LEARNING\\DF Assignments\\Loan Default\\data\\Loan_Default.csv",
+  "n_training_rows": 79709,
+  "n_test_rows": 24910,
+  "default_rate": 0.16322352204388704,
+  "feature_columns": [
+    "loan_amount",
+    "term",
+    "property_value",
+    "income",
+    "Credit_Score",
+    "LTV",
+    "dtir1",
+    "loan_limit",
+    "approv_in_adv",
+    "loan_type",
+    "loan_purpose",
+    "Credit_Worthiness",
+    "open_credit",
+    "business_or_commercial",
+    "Neg_ammortization",
+    "interest_only",
+    "lump_sum_payment",
+    "construction_type",
+    "occupancy_type",
+    "Secured_by",
+    "total_units",
+    "credit_type",
+    "co-applicant_credit_type",
+    "submission_of_application",
+    "Region",
+    "Security_Type"
+  ],
+  "numeric_features": [
+    "loan_amount",
+    "term",
+    "property_value",
+    "income",
+    "Credit_Score",
+    "LTV",
+    "dtir1"
+  ],
+  "categorical_features": [
+    "loan_limit",
+    "approv_in_adv",
+    "loan_type",
+    "loan_purpose",
+    "Credit_Worthiness",
+    "open_credit",
+    "business_or_commercial",
+    "Neg_ammortization",
+    "interest_only",
+    "lump_sum_payment",
+    "construction_type",
+    "occupancy_type",
+    "Secured_by",
+    "total_units",
+    "credit_type",
+    "co-applicant_credit_type",
+    "submission_of_application",
+    "Region",
+    "Security_Type"
+  ],
+  "engineered_features": [
+    "loan_to_income",
+    "property_to_income",
+    "loan_to_value_ratio",
+    "payment_to_income",
+    "high_dti"
+  ],
+  "excluded_columns": {
+    "leakage": [
+      "rate_of_interest",
+      "Interest_rate_spread",
+      "Upfront_charges"
+    ],
+    "protected": [
+      "Gender",
+      "age"
+    ],
+    "identifiers": [
+      "ID",
+      "year"
+    ]
+  },
+  "seed": 42,
+  "python_version": "3.11.9",
+  "library_versions": {
+    "scikit-learn": "1.8.0",
+    "xgboost": "3.2.0",
+    "pandas": "3.0.1",
+    "numpy": "2.4.2",
+    "joblib": "1.5.3"
+  },
+  "hyperparameters": {
+    "n_estimators": 400,
+    "learning_rate": 0.05,
+    "max_depth": 5,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "min_child_weight": 10,
+    "reg_lambda": 2.0,
+    "eval_metric": "logloss",
+    "n_jobs": -1
+  },
+  "calibration_method": "isotonic",
+  "selection_metric": "pr_auc",
+  "candidate_scores": {
+    "logistic_regression": 0.38970879420612814,
+    "random_forest": 0.559640717853618,
+    "xgboost": 0.619065082881837
+  },
+  "assumptions": [
+    "Status is treated as a 12-month default flag; the dataset does not state an observation window.",
+    "income is interpreted as MONTHLY income (median 5,760 against a median loan of 296,500; an annual reading implies a 52x loan-to-income ratio).",
+    "Complete-case training: rows missing property_value, LTV or dtir1 are excluded because their missingness predicts default (ROC-AUC 0.7155 from missingness alone)."
+  ],
+  "limitations": [
+    "Credit_Score is not predictive in this dataset (univariate ROC-AUC 0.5030, flat default rate across all deciles) and appears to be randomly generated. Do not interpret its coefficient or SHAP value.",
+    "The dataset has no time dimension (year == 2019 for all rows), so no out-of-time validation, vintage analysis or macroeconomic conditioning is possible.",
+    "Trained on a single cross-section; behaviour under large input shocks is an extrapolation beyond the training distribution."
+  ]
+}

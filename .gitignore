@@ -28,11 +28,16 @@ data/*.csv
 reports/*.json
 reports/*.png
 
-# Model artifacts: the CURRENT model IS committed, so the container and CI can
-# build from a clean clone. Older versions are not.
-artifacts/*
-!artifacts/LATEST
-!artifacts/v20260820T235355Z/
+# Model artifacts ARE committed. The service loads the model at startup, so a
+# deploy builds straight from the repository with no artifact store.
+#
+# Do not pin a version here. An earlier version of this file whitelisted one
+# specific version directory; retraining produced a new version, the whitelist
+# went stale, and the model silently stopped being committed. The deploy then
+# started without a model and failed its health check.
+#
+# Prune old versions by deleting the directory instead. Each is about 880KB and
+# only the one named by artifacts/LATEST needs to be present.
 
 # Jupyter
 .ipynb_checkpoints/
