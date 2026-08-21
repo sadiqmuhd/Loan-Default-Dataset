@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credit-risk-platform"
+version = "1.0.0"
+description = "Mortgage credit-risk decisioning platform: calibrated PD, expected loss, risk grades and explainable decisions."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Abubakar Sadiq Muhammad" }]
+
+dependencies = [
+    "fastapi==0.134.0",
+    "uvicorn[standard]==0.51.0",
+    "pandas==3.0.1",
+    "numpy==2.4.2",
+    "scikit-learn==1.8.0",
+    "xgboost==3.2.0",
+    "pydantic==2.12.5",
+    "pydantic-settings==2.14.2",
+    "pandera==0.32.1",
+    "shap==0.51.0",
+    "pyyaml==6.0.3",
+    "joblib==1.5.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "httpx==0.28.1",
+    "ruff==0.16.0",
+    "matplotlib==3.10.8",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --strict-markers"
+markers = [
+    "slow: tests that retrain a model (deselect with '-m \"not slow\"')",
+]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Calling these in argument defaults is the documented FastAPI idiom, not the
+# mutable-default bug B008 exists to catch.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test helpers legitimately import inside functions and use bare asserts.
+"tests/**" = ["B011"]

@@ -1,0 +1,25 @@
+# Nixpacks build plan for Railway.
+#
+# The default Python provider installs requirements.txt but would not install
+# THIS project, whose package lives under src/. Without that final step
+# `uvicorn credit_risk.api.main:app` cannot import the application. The install
+# phase is therefore made explicit.
+
+providers = ["python"]
+
+[phases.setup]
+# gcc and the C++ runtime are needed for the xgboost/scikit-learn wheels.
+nixPkgs = ["python311", "gcc"]
+nixLibs = ["stdenv.cc.cc.lib", "zlib"]
+
+[phases.install]
+cmds = [
+  "python -m venv --copies /opt/venv",
+  ". /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel",
+  ". /opt/venv/bin/activate && pip install -r requirements.txt",
+  # --no-deps: dependencies are already pinned and installed above.
+  ". /opt/venv/bin/activate && pip install --no-deps -e ."
+]
+
+[start]
+cmd = "uvicorn credit_risk.api.main:app --host 0.0.0.0 --port $PORT --workers 2"

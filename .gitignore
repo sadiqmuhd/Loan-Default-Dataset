@@ -1,24 +1,44 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environments
 .env
 venv/
 .venv/
 
-# Data (large files — add to git-lfs or exclude)
-data/*.csv
+# Caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
-# Models
-models/*.pkl
+# Data: the full 28MB dataset is not committed (see README for how to obtain
+# it). The 5,000-row stratified sample IS committed so a fresh deploy has a
+# working portfolio for the stress and concentration endpoints.
+data/*.csv
+!data/portfolio_sample.csv
+
+# Generated reports
+reports/*.json
+reports/*.png
+
+# Model artifacts: the CURRENT model IS committed, so the container and CI can
+# build from a clean clone. Older versions are not.
+artifacts/*
+!artifacts/LATEST
+!artifacts/v20260820T235355Z/
 
 # Jupyter
 .ipynb_checkpoints/
-notebooks/.ipynb_checkpoints/
 
-# VS Code
+# Editors / OS
 .vscode/
-
-# OS
+.idea/
 .DS_Store
 Thumbs.db

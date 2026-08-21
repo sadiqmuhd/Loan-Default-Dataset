@@ -1,0 +1,201 @@
+# GENERATED FILE - do not edit by hand.
+# Regenerate with: python scripts/generate_data_contract.py
+#
+# Categorical levels are derived from data/Loan_Default.csv.
+# Numeric bounds are domain-set (see scripts/generate_data_contract.py)
+# and deliberately reject impossible observations.
+
+categorical:
+  Credit_Worthiness:
+    allowed:
+    - l1
+    - l2
+    null_count: 0
+    nullable: false
+  Gender:
+    allowed:
+    - Female
+    - Joint
+    - Male
+    - Sex Not Available
+    null_count: 0
+    nullable: false
+  Neg_ammortization:
+    allowed:
+    - neg_amm
+    - not_neg
+    null_count: 121
+    nullable: true
+  Region:
+    allowed:
+    - North
+    - North-East
+    - central
+    - south
+    null_count: 0
+    nullable: false
+  Secured_by:
+    allowed:
+    - home
+    - land
+    null_count: 0
+    nullable: false
+  Security_Type:
+    allowed:
+    - Indriect
+    - direct
+    null_count: 0
+    nullable: false
+  age:
+    allowed:
+    - 25-34
+    - 35-44
+    - 45-54
+    - 55-64
+    - 65-74
+    - <25
+    - '>74'
+    null_count: 200
+    nullable: true
+  approv_in_adv:
+    allowed:
+    - nopre
+    - pre
+    null_count: 908
+    nullable: true
+  business_or_commercial:
+    allowed:
+    - b/c
+    - nob/c
+    null_count: 0
+    nullable: false
+  co-applicant_credit_type:
+    allowed:
+    - CIB
+    - EXP
+    null_count: 0
+    nullable: false
+  construction_type:
+    allowed:
+    - mh
+    - sb
+    null_count: 0
+    nullable: false
+  credit_type:
+    allowed:
+    - CIB
+    - CRIF
+    - EQUI
+    - EXP
+    null_count: 0
+    nullable: false
+  interest_only:
+    allowed:
+    - int_only
+    - not_int
+    null_count: 0
+    nullable: false
+  loan_limit:
+    allowed:
+    - cf
+    - ncf
+    null_count: 3344
+    nullable: true
+  loan_purpose:
+    allowed:
+    - p1
+    - p2
+    - p3
+    - p4
+    null_count: 134
+    nullable: true
+  loan_type:
+    allowed:
+    - type1
+    - type2
+    - type3
+    null_count: 0
+    nullable: false
+  lump_sum_payment:
+    allowed:
+    - lpsm
+    - not_lpsm
+    null_count: 0
+    nullable: false
+  occupancy_type:
+    allowed:
+    - ir
+    - pr
+    - sr
+    null_count: 0
+    nullable: false
+  open_credit:
+    allowed:
+    - nopc
+    - opc
+    null_count: 0
+    nullable: false
+  submission_of_application:
+    allowed:
+    - not_inst
+    - to_inst
+    null_count: 200
+    nullable: true
+  total_units:
+    allowed:
+    - 1U
+    - 2U
+    - 3U
+    - 4U
+    null_count: 0
+    nullable: false
+numeric:
+  Credit_Score:
+    max: 900.0
+    min: 300.0
+    nullable: false
+    observed_max: 900.0
+    observed_min: 500.0
+    rejected_by_bounds: 0
+  LTV:
+    max: 250.0
+    min: 0.0
+    nullable: true
+    observed_max: 7831.25
+    observed_min: 0.967478198
+    rejected_by_bounds: 7
+  dtir1:
+    max: 100.0
+    min: 0.0
+    nullable: true
+    observed_max: 61.0
+    observed_min: 5.0
+    rejected_by_bounds: 0
+  income:
+    max: 100000000.0
+    min: 1.0
+    nullable: true
+    observed_max: 578580.0
+    observed_min: 0.0
+    rejected_by_bounds: 1260
+  loan_amount:
+    max: 100000000.0
+    min: 1000.0
+    nullable: false
+    observed_max: 3576500.0
+    observed_min: 16500.0
+    rejected_by_bounds: 0
+  property_value:
+    max: 100000000.0
+    min: 1000.0
+    nullable: true
+    observed_max: 16508000.0
+    observed_min: 8000.0
+    rejected_by_bounds: 0
+  term:
+    max: 480.0
+    min: 12.0
+    nullable: true
+    observed_max: 360.0
+    observed_min: 96.0
+    rejected_by_bounds: 0
