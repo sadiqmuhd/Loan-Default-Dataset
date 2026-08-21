@@ -21,6 +21,15 @@ class ReasonCodeOut(BaseModel):
 
 
 class ExplanationOut(BaseModel):
+    reason_codes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Compact adverse-action style codes for the principal risk factors, "
+            "strongest first. Derived from the SHAP drivers and the applicant's "
+            "actual values."
+        ),
+        examples=[["HIGH_DTI", "HIGH_LTV", "LARGE_EXPOSURE"]],
+    )
     risk_drivers: list[ReasonCodeOut] = Field(description="Factors increasing assessed risk.")
     risk_reducers: list[ReasonCodeOut] = Field(description="Factors reducing assessed risk.")
     base_value: float = Field(description="Model base score before feature contributions.")

@@ -100,6 +100,7 @@ def test_auc_is_meaningfully_better_than_random(loaded_model):
     assert metrics["calibrated"]["roc_auc"] > 0.70
 
 
+@requires_data
 @requires_model
 def test_no_single_feature_dominates(loaded_model):
     """In the original model two leakage indicators held 97.5% of importance and
@@ -162,6 +163,7 @@ def test_credit_score_is_non_predictive_noise(raw_data):
     )
 
 
+@requires_data
 @requires_model
 def test_predictions_are_not_degenerate(scoring_service):
     """A leaking model produces PDs piled at 0 and 1. A real one is spread out."""

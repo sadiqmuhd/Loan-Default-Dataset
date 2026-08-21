@@ -76,6 +76,55 @@ class ReasonCode:
         return asdict(self)
 
 
+# Thresholds for turning an adverse SHAP contribution into a named code. A code
+# is only emitted when the model penalised the feature AND the value is actually
+# adverse, so "HIGH_DTI" cannot appear on an application with a low DTI.
+#
+# An adverse action notice has to state the principal reasons for a decline in
+# terms the applicant can act on. "SHAP contribution -0.31 in log-odds space" is
+# not that; "your debt-to-income ratio is high" is.
+_CODE_RULES: list[tuple[str, str, Any]] = [
+    ("dtir1", "HIGH_DTI", lambda v: v is not None and v >= 45),
+    ("LTV", "HIGH_LTV", lambda v: v is not None and v >= 85),
+    ("loan_to_income", "HIGH_LOAN_TO_INCOME", lambda v: v is not None and v >= 5),
+    ("income", "LOW_INCOME_FOR_EXPOSURE", lambda v: True),
+    ("loan_amount", "LARGE_EXPOSURE", lambda v: True),
+    ("Neg_ammortization", "NEGATIVE_AMORTISATION", lambda v: v == "neg_amm"),
+    ("lump_sum_payment", "BALLOON_REPAYMENT", lambda v: v == "lpsm"),
+    ("interest_only", "INTEREST_ONLY_STRUCTURE", lambda v: v == "int_only"),
+    ("open_credit", "OPEN_CREDIT_LINES", lambda v: v == "opc"),
+    ("Credit_Worthiness", "WEAK_CREDIT_ASSESSMENT", lambda v: v != "l1"),
+    ("business_or_commercial", "COMMERCIAL_PURPOSE", lambda v: v == "b/c"),
+    ("occupancy_type", "NON_PRIMARY_RESIDENCE", lambda v: v != "pr"),
+    ("submission_of_application", "INDIRECT_CHANNEL", lambda v: v != "to_inst"),
+    ("term", "LONG_TERM", lambda v: v is not None and v >= 360),
+    ("property_value", "LIMITED_COLLATERAL", lambda v: True),
+    ("loan_purpose", "PURPOSE_RISK", lambda v: True),
+    ("credit_type", "CREDIT_BUREAU_RISK", lambda v: True),
+    ("co-applicant_credit_type", "CO_APPLICANT_CREDIT_RISK", lambda v: True),
+    ("loan_type", "LOAN_TYPE_RISK", lambda v: True),
+    ("Region", "REGIONAL_RISK", lambda v: True),
+]
+
+_CODES_BY_FEATURE = {feature: (code, test) for feature, code, test in _CODE_RULES}
+
+
+def derive_reason_codes(drivers: list[ReasonCode], limit: int = 4) -> list[str]:
+    """Compact codes for the adverse factors, strongest contribution first."""
+    codes: list[str] = []
+    for driver in drivers:
+        entry = _CODES_BY_FEATURE.get(driver.feature)
+        if entry is None:
+            continue
+        code, applies = entry
+        try:
+            if applies(driver.value) and code not in codes:
+                codes.append(code)
+        except TypeError:
+            continue
+    return codes[:limit]
+
+
 @dataclass
 class Explanation:
     risk_drivers: list[ReasonCode]
@@ -88,8 +137,13 @@ class Explanation:
         "calibrated PD, but magnitudes are not percentage-point contributions."
     )
 
+    @property
+    def reason_codes(self) -> list[str]:
+        return derive_reason_codes(self.risk_drivers)
+
     def to_dict(self) -> dict[str, Any]:
         return {
+            "reason_codes": self.reason_codes,
             "risk_drivers": [r.to_dict() for r in self.risk_drivers],
             "risk_reducers": [r.to_dict() for r in self.risk_reducers],
             "base_value": self.base_value,

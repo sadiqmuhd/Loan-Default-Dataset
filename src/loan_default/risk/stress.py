@@ -46,6 +46,8 @@ class ScenarioResult:
     summary: PortfolioSummary
     # Deltas against base
     delta_expected_loss: float = 0.0
+    # A true percentage, not a ratio. Severe reads 1097.0, meaning expected loss
+    # rises by roughly eleven times the base case.
     delta_expected_loss_pct: float = 0.0
     delta_weighted_pd: float = 0.0
     grade_migration: dict[str, int] = field(default_factory=dict)
@@ -197,7 +199,9 @@ def run_all_scenarios(
 
     for result in results:
         result.delta_expected_loss = result.summary.total_expected_loss - base_el
-        result.delta_expected_loss_pct = result.delta_expected_loss / base_el if base_el else 0.0
+        result.delta_expected_loss_pct = (
+            100.0 * result.delta_expected_loss / base_el if base_el else 0.0
+        )
         result.delta_weighted_pd = (
             result.summary.weighted_average_pd - base.summary.weighted_average_pd
         )
