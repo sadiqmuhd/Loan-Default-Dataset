@@ -1,5 +1,5 @@
 {
-  "model_version": "v20260821T011832Z",
+  "model_version": "v20260821T124245Z",
   "test_rows": 24910,
   "honest_roc_auc": 0.8244,
   "leaking_roc_auc": 1.0

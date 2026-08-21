@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loan_default.api.dependencies import load_model_state
 from loan_default.api.errors import register_exception_handlers
 from loan_default.api.middleware import RequestContextMiddleware
-from loan_default.api.routers import health, model, portfolio, risk
+from loan_default.api.routers import health, model, monitoring, portfolio, risk
 from loan_default.config import Settings, get_settings
 from loan_default.logging_config import configure_logging
 
@@ -107,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(risk.router)
     app.include_router(model.router)
     app.include_router(portfolio.router)
+    app.include_router(monitoring.router)
 
     @app.get("/", tags=["meta"], summary="Service metadata")
     def root() -> dict:

@@ -259,13 +259,39 @@ book (24.6%). A production system would need an explicit policy for applications
 with missing collateral data.
 
 **7. `Status` has no stated observation window.** It is treated as a 12-month
-default flag; the dataset does not confirm this.
+default flag; the dataset does not confirm this. Every economic quantity in
+`config/risk_policy.yaml` is expressed over that same twelve months, because a
+PD and a margin measured over different periods cannot be compared. If the true
+window is longer, the cut-off is conservative; if shorter, it is loose. The
+assumption is stated here rather than buried in the arithmetic, and
+`tests/unit/test_risk.py` pins the two horizons together so they cannot drift
+apart again.
 
 **8. `income` is interpreted as monthly.** Median income 5,760 against a median
 loan of 296,500. Read as annual this implies a 52× loan-to-income ratio, which is
 not a real mortgage; read as monthly it gives 4.36×, which is. Cross-checked
 against a reported median DTI of 39% versus an implied principal-only burden of
 15.9%.
+
+**9. LGD and EAD are biased in opposite directions, by unknown amounts.**
+`EAD = loan_amount` ignores amortisation, so a loan defaulting in year three
+shows more exposure than is really outstanding - this overstates loss. The LGD
+proxy values collateral at its ORIGINATION appraisal, ignoring both the years
+elapsed and any price movement since - in a falling market this understates
+loss. The two do not cancel in any principled way, and the data contains
+neither balance history nor updated valuations to correct either. Expected loss
+figures should be read as order-of-magnitude, not as point estimates.
+
+**10. The haircut and workout-cost parameters are assumed, not sourced.** A
+25% distressed-sale discount and 10% workout cost are plausible round numbers
+for residential mortgage recovery. They are not calibrated to this book, and no
+citation backs them. They are configurable precisely so a reviewer can substitute
+their own and see what moves.
+
+**11. Break-even is reported but never applied.** The cut-off is the hurdle PD,
+where RAROC meets the cost of equity. Capital is a flat 8% of exposure rather
+than risk-weighted, there is no discounting, and no term structure of default.
+A real capital model would vary the charge with PD, LGD and maturity.
 
 ---
 

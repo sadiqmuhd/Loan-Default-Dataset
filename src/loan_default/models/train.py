@@ -246,7 +246,15 @@ def train(
     }
 
     registry = ModelRegistry(settings.artifacts_dir)
-    path = registry.save(calibrated, metadata, metrics_payload)
+    # Reference distribution for drift monitoring, drawn from the rows the model
+    # was actually fitted on. A sample rather than the full frame: PSI is a
+    # distributional comparison, and 5,000 rows resolve it to well within the
+    # 0.10 "investigate" threshold while keeping the artifact under a megabyte.
+    baseline = X_fit.sample(n=min(5_000, len(X_fit)), random_state=seed).copy()
+    baseline["_reference_pd"] = calibrated.predict_proba(baseline[X_fit.columns])[:, 1]
+    logger.info("captured drift baseline: %d rows", len(baseline))
+
+    path = registry.save(calibrated, metadata, metrics_payload, baseline=baseline)
     print(f"\nSaved model {version} -> {path}")
 
     settings.reports_dir.mkdir(parents=True, exist_ok=True)

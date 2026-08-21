@@ -1,8 +1,8 @@
 {
-  "model_version": "v20260821T011832Z",
+  "model_version": "v20260821T124245Z",
   "model_type": "xgboost",
-  "trained_at": "2026-08-21T01:18:32.311655+00:00",
-  "training_duration_seconds": 199.62,
+  "trained_at": "2026-08-21T12:42:45.788845+00:00",
+  "training_duration_seconds": 130.17,
   "data_sha256": "4234b122f463ff4d563de600ade5ec347a9ab8f02cfc204535f7c0d4929bfe70",
   "data_source": "C:\\Users\\user\\Desktop\\E-LEARNING\\DF Assignments\\Loan Default\\data\\Loan_Default.csv",
   "n_training_rows": 79709,

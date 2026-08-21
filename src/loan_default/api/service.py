@@ -35,11 +35,15 @@ class ScoringService:
         metadata: ModelMetadata,
         metrics: dict[str, Any],
         explainer: PredictionExplainer | None = None,
+        baseline: pd.DataFrame | None = None,
     ):
         self.model = model
         self.metadata = metadata
         self.metrics = metrics
         self.explainer = explainer
+        # Training-distribution reference for drift checks. Optional: an older
+        # artifact predates baseline capture and must still serve predictions.
+        self.baseline = baseline
         self.policy = load_risk_policy()
         self._grade_descriptions = {g.grade: g.description for g in grade_scale(self.policy)}
         self._feature_columns = list(metadata.feature_columns)
@@ -117,14 +121,7 @@ class ScoringService:
             "risk_grade": grade,
             "grade_description": self._grade_descriptions.get(grade, ""),
             "loss": loss.to_dict(),
-            "decision": {
-                "decision": str(decision.decision),
-                "reason": decision.reason,
-                "break_even_pd": decision.break_even_pd,
-                "expected_profit": decision.expected_profit,
-                "expected_revenue": decision.expected_revenue,
-                "expected_loss": decision.expected_loss,
-            },
+            "decision": decision.to_dict(),
             "explanation": explanation,
             "assumptions_version": str(self.policy.get("version", "unversioned")),
             "assumptions": {
@@ -258,14 +255,7 @@ class ScoringService:
             "risk_grade": grade,
             "grade_description": self._grade_descriptions.get(grade, ""),
             "loss": loss.to_dict(),
-            "decision": {
-                "decision": str(decision.decision),
-                "reason": decision.reason,
-                "break_even_pd": decision.break_even_pd,
-                "expected_profit": decision.expected_profit,
-                "expected_revenue": decision.expected_revenue,
-                "expected_loss": decision.expected_loss,
-            },
+            "decision": decision.to_dict(),
             "explanation": explanation,
             "assumptions_version": str(self.policy.get("version", "unversioned")),
             "assumptions": {

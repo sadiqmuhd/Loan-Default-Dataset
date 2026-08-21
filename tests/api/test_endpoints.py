@@ -306,8 +306,13 @@ def test_batch_portfolio_covers_only_scored_rows(app_client, example_application
 
 def test_assessment_carries_assumptions_version(app_client, example_application):
     """Loss figures are only comparable across responses sharing a policy version."""
+    from loan_default.config import load_risk_policy
+
     body = app_client.post("/v1/risk/assess", json=example_application).json()
-    assert body["assumptions_version"] == "1.0.0"
+    # Pinned to the policy file rather than a literal, so bumping the policy
+    # version does not require editing a test that is not about versioning.
+    assert body["assumptions_version"] == load_risk_policy()["version"]
+    assert body["assumptions_version"] != ""
 
 
 def test_review_is_a_valid_decision_value(app_client, example_application):

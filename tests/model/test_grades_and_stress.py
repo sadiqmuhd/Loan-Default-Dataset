@@ -69,6 +69,34 @@ def test_grades_span_a_meaningful_range(scored_test_set):
     assert rates.max() - rates.min() > 0.3
 
 
+def test_no_grade_is_too_thin_to_be_evidence(scored_test_set):
+    """Every band must hold enough of the book to mean something.
+
+    An earlier scale put grade A below 2% PD, which held 88 of 24,910 loans
+    (0.35%) with zero observed defaults. Zero defaults in 88 loans is not
+    evidence the true rate is low - the 95% upper bound is about 3.4%. A grade
+    nobody lands in cannot be validated, priced or challenged.
+
+    Isotonic calibration also floors this model near 1.4% PD, so a sub-2% band
+    was close to unreachable by construction.
+    """
+    _, y_test, predictions = scored_test_set
+    summary = grade_summary(predictions, y_test)
+
+    thin = summary[summary["share"] < 0.02]
+    assert thin.empty, (
+        "These grades hold under 2% of the book and cannot support an observed "
+        f"default rate:\n{thin[['grade', 'n', 'share', 'observed_default_rate']]}"
+    )
+
+
+def test_every_grade_is_populated(scored_test_set):
+    """An empty band is a scale that does not describe this portfolio."""
+    _, y_test, predictions = scored_test_set
+    summary = grade_summary(predictions, y_test)
+    assert (summary["n"] > 0).all(), f"empty grades:\n{summary[summary['n'] == 0]}"
+
+
 # ------------------------------------------------------------------ stress
 
 

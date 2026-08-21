@@ -61,22 +61,40 @@ def test_mermaid_declares_a_diagram_type(index: int):
     assert first.startswith(known), f"Mermaid block {index} starts with {first!r}"
 
 
-def test_delimiters_are_balanced_on_every_line():
-    """Catches truncated markdown links.
+def test_delimiters_are_balanced_across_the_file():
+    """Whole-file balance. Prose may legitimately wrap a parenthetical across
+    lines, so a per-line check would false-positive; a whole-file count still
+    catches a genuinely dropped character."""
+    for opener, closer in (("(", ")"), ("[", "]"), ("{", "}")):
+        assert TEXT.count(opener) == TEXT.count(closer), (
+            f"{opener}{closer} unbalanced across README.md "
+            f"({TEXT.count(opener)} vs {TEXT.count(closer)})"
+        )
+
+
+def test_delimiters_are_balanced_on_every_line_carrying_a_link():
+    """Catches truncated markdown links, which is where imbalance does damage.
 
     The README shipped once with seven dropped ")" characters, which turned
     "[Kaggle](https://...dataset) into" into "[Kaggle](https://...datasetinto" -
     a link whose URL had swallowed the following word. It still rendered as a
     link, just pointing at a 404, so nothing looked wrong until you clicked it.
+
+    Restricted to lines containing a link, because a wrapped parenthetical in
+    ordinary prose is fine and only the link case is a silent failure.
     """
     offenders = []
     for number, line in enumerate(TEXT.split("\n"), 1):
+        if "](" not in line:
+            continue
         for opener, closer in (("(", ")"), ("[", "]")):
             if line.count(opener) != line.count(closer):
                 offenders.append(
                     f"line {number}: {opener}{closer} unbalanced - {line.strip()[:70]}"
                 )
-    assert not offenders, "Unbalanced delimiters:" + "".join(f"\n  {o}" for o in offenders)
+    assert not offenders, "Unbalanced delimiters on link lines:" + "".join(
+        f"\n  {o}" for o in offenders
+    )
 
 
 def test_no_markdown_link_url_runs_into_following_text():

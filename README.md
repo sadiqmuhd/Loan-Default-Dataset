@@ -6,8 +6,8 @@ and exposes the model through a production FastAPI service.
 
 [![CI](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/sadiqmuhd/Loan-Default-ML-Pipeline/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
-![Tests](https://img.shields.io/badge/tests-214%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)
 ![Model](https://img.shields.io/badge/held--out%20ROC--AUC-0.824-informational)
 
 ---
@@ -56,7 +56,7 @@ flowchart TD
     F --> H["Reason codes"]
 
     E --> I["Risk grade A to G"]
-    G --> J{"Decision engine<br/>break-even PD from economics"}
+    G --> J{"Decision engine<br/>hurdle PD where RAROC meets cost of equity"}
     I --> J
     H --> J
 
@@ -274,24 +274,30 @@ internal bank scale.
 
 ![Risk grades](docs/images/risk_grades.png)
 
-| Grade | PD band | Observed default rate | Loans |
-|---|---|---:|---:|
-| A | < 2% | 0.0% | 88 |
-| B | 2–5% | 3.4% | 5,884 |
-| C | 5–10% | 5.9% | 5,943 |
-| D | 10–20% | 13.5% | 8,296 |
-| E | 20–35% | 26.2% | 1,771 |
-| F | 35–60% | 42.3% | 1,061 |
-| G | > 60% | 82.1% | 1,767 |
+| Grade | PD band | Observed default rate | Loans | Share |
+|---|---|---:|---:|---:|
+| A | < 3% | 1.9% | 1,029 | 4.1% |
+| B | 3–5% | 3.7% | 4,957 | 19.9% |
+| C | 5–8% | 5.6% | 4,428 | 17.8% |
+| D | 8–13% | 10.3% | 6,353 | 25.5% |
+| E | 13–25% | 18.9% | 4,803 | 19.3% |
+| F | 25–50% | 36.4% | 1,412 | 5.7% |
+| G | > 50% | 79.9% | 1,928 | 7.7% |
+
+Boundaries are set against the observed PD distribution, not chosen as round
+numbers. An earlier scale started grade A at PD < 2% and it held **88 loans —
+0.35% of the book — with zero observed defaults**. That looked flattering and
+meant nothing: zero defaults in 88 loans carries a 95% upper bound of about
+3.4%, and isotonic calibration floors this model near 1.4% PD, so a sub-2% band
+was close to unreachable by construction. A grade nobody lands in cannot be
+validated, priced or challenged.
+
+Every band now holds at least 4% of the book, and a test fails the build if any
+grade falls below 2% or empties entirely.
 
 Monotonicity is the property that matters, and it is enforced by a test rather
 than asserted in prose: if a grade ever defaults more often than the grade below
 it, the build fails.
-
-**Grade A is thin — 88 loans and zero observed defaults.** Zero is not evidence
-that the true rate is zero; the 95% upper bound on 0/88 is about 3.4%. The band
-is honest about being under-populated rather than being quietly widened to look
-better.
 
 ---
 
@@ -327,18 +333,54 @@ assume otherwise.
 ## Decision engine
 
 There are no hand-picked 0.3 / 0.6 thresholds. The cut-off is *derived* from the
-economics in `config/risk_policy.yaml`:
+economics in `config/risk_policy.yaml`, and it is not break-even.
+
+**Break-even** is where expected margin merely offsets expected loss:
 
 ```
-lifetime_revenue_rate = annual_net_margin x expected_life_years   =  0.02 x 7 = 0.14
-break_even_PD         = lifetime_revenue_rate / LGD
+revenue_rate  = annual_net_margin x pd_horizon_years        =  0.02 x 1 = 0.02
+break_even_PD = revenue_rate / (LGD + revenue_rate)
 ```
 
-A loan is worth writing while `PD x LGD < expected margin`. Because the
-break-even depends on LGD, **a well-collateralised loan is tolerated at a higher
-PD than a thinly-collateralised one** — which is how lending actually works, and
-which a fixed 0.3 threshold cannot express. A configurable band around the
-break-even routes borderline cases to REVIEW instead of forcing a binary call.
+That is a floor, not a policy. A bank writing loans at break-even earns nothing
+on the capital tied up against them. The **applied cut-off is the hurdle PD**,
+where risk-adjusted return on capital equals the cost of that capital:
+
+```
+RAROC     = ((1 - PD) x revenue_rate - PD x LGD) / capital_ratio
+hurdle_PD = (revenue_rate - cost_of_equity x capital_ratio) / (revenue_rate + LGD)
+```
+
+| LGD | Break-even PD | **Hurdle PD (applied)** |
+|---:|---:|---:|
+| 0.10 | 16.67% | **8.67%** |
+| 0.25 | 7.41% | **3.85%** |
+| 0.45 | 4.26% | **2.21%** |
+| 0.80 | 2.44% | **1.27%** |
+
+Because both depend on LGD, **a well-collateralised loan is tolerated at a
+higher PD than a thinly-collateralised one** — which is how lending actually
+works, and which a fixed 0.3 threshold cannot express. Applications within 25%
+of the hurdle route to REVIEW rather than forcing a binary call.
+
+### Horizon: the assumption everything else rests on
+
+`MODEL_CARD.md` treats `Status` as a **12-month** default flag, so the margin is
+accumulated over that same twelve months. This matters more than it looks.
+
+An earlier version of this policy multiplied the annual margin by a seven-year
+expected life and compared the result against a twelve-month PD. Mixing horizons
+that way overstates every loan by roughly 7× and produced a break-even PD of
+**58%** — a policy that would approve a borrower with a coin-flip chance of
+defaulting inside a year. The arithmetic was internally consistent and the
+number was still nonsense.
+
+`tests/unit/test_risk.py` now pins the horizons together and asserts the cut-off
+lands in a plausible credit range, so the units error cannot return quietly.
+
+**Not modelled:** discounting (immaterial over one year, material if the horizon
+is extended), the term structure of default, prepayment, and risk-weighting —
+`capital_ratio` is flat rather than varying with asset risk.
 
 ---
 
@@ -373,12 +415,19 @@ property_value ↓ → LTV ↑ → PD ↑ (re-scored)
 
 | Scenario | Shocks | Weighted PD | Weighted LGD | Expected loss | EL rate | Δ EL |
 |---|---|---:|---:|---:|---:|---:|
-| Base | — | 15.20% | 15.10% | 24,748,955 | 2.54% | — |
-| Moderate | income −10%, property −15%, DTI +15% | 52.06% | 22.77% | 138,937,021 | 14.26% | +461% |
-| Severe | income −25%, property −30%, DTI +35% | 83.77% | 33.37% | 296,256,425 | 30.40% | +1,097% |
+| Base | — | 15.0% | 15.2% | 41,288,808 | 2.54% | — |
+| Moderate | income −10%, property −15%, DTI +15% | 51.4% | 22.8% | ~232,000,000 | ~14% | ~+460% |
+| Severe | income −25%, property −30%, DTI +35% | 82.8% | 33.2% | ~490,000,000 | ~30% | ~+1,100% |
+
+Grade migration under severe stress: 3,818 loans fall into grade G, drawn from
+every band above it (A −197, B −890, C −795, D −1,101, E −687, F −148).
+
+The stressed figures are deliberately rounded. The engine computes
+`+1086.0879%`; reporting that would imply a precision the exercise does not
+have, when the model is extrapolating well outside its training envelope.
 
 **The severe scenario reports its own unreliability.** Each result carries an
-extrapolation diagnostic, and under severe shocks 60.5% of the stressed book sits
+extrapolation diagnostic, and under severe shocks 59.6% of the stressed book sits
 beyond the 99th percentile of LTV in the unstressed portfolio, so the response
 returns `confidence: "low"`. The model is being asked about applications unlike
 anything it was trained on. The number indicates direction, not magnitude, and
@@ -403,6 +452,7 @@ plausible-looking number.
 | `GET` | `/v1/model/policy` | Active risk policy and assumptions version |
 | `GET` | `/v1/portfolio/summary` | Exposure, EL and concentration |
 | `POST` | `/v1/portfolio/stress-test` | Run the scenarios |
+| `POST` | `/v1/monitoring/drift` | PSI against the training distribution |
 
 ### Example assessment
 
@@ -412,7 +462,7 @@ plausible-looking number.
 ```jsonc
 {
   "request_id": "e99ab6fa-28d4-43dd-8884-b45d4b6891d4",
-  "model_version": "v20260821T011832Z",
+  "model_version": "v20260821T124245Z",
   "probability_of_default": 0.0578,
   "risk_grade": "C",
   "grade_description": "Modest risk",
@@ -429,9 +479,14 @@ plausible-looking number.
 
   "decision": {
     "decision": "APPROVE",
-    "reason": "PD 5.78% is below the break-even PD of 58.33% by more than the 5% review band.",
-    "break_even_pd": 0.5833,
-    "expected_profit": 37397.43
+    "reason": "PD 5.78% clears the hurdle PD of 8.67% over a 1-year horizon. RAROC 16.3% exceeds the 12.0% cost of equity.",
+    "hurdle_pd": 0.0867,        // the applied cut-off
+    "break_even_pd": 0.1667,    // reported, but never the cut-off
+    "raroc": 0.1633,
+    "cost_of_equity": 0.12,
+    "capital_required": 23720.0,
+    "horizon_years": 1.0,       // PD and margin share this horizon
+    "expected_profit": 3873.71
   },
 
   "explanation": {
@@ -441,7 +496,7 @@ plausible-looking number.
     "note": "SHAP is computed on the uncalibrated score in log-odds space..."
   },
 
-  "assumptions_version": "1.0.0",
+  "assumptions_version": "2.0.0",
   "assumptions": { "lgd_is_modelled": false, "ead_method": "at_origination" },
   "latency_ms": 124.2
 }
@@ -466,9 +521,43 @@ Design decisions behind it:
 
 ---
 
+## Monitoring
+
+The model artifact carries a 5,000-row sample of the data it was fitted on.
+`POST /v1/monitoring/drift` compares a submitted batch against that baseline and
+returns population stability indices, worst feature first, plus PSI on the
+predicted PD distribution — which catches shifts that no single feature shows.
+
+Versioning the baseline with the model matters: "has the input drifted" is only
+meaningful relative to one specific model's training distribution, so the two
+cannot be mismatched.
+
+| PSI | Reading |
+|---|---|
+| < 0.10 | No material shift |
+| 0.10 – 0.25 | Investigate |
+| > 0.25 | Population has shifted materially |
+
+The tests simulate shifts and assert they are caught — a 40% income cut has to
+register as `major`, or the check is not working. A monitoring endpoint that
+only ever returns "no drift" is indistinguishable from a broken one.
+
+**What this is not.** There is no scheduled job, no metric store and no
+alerting. The endpoint scores a batch you hand it. Real monitoring runs on a
+window of live traffic and pages someone on a threshold breach; that is
+infrastructure this project does not have. PSI also measures *input* shift only
+— it says nothing about whether accuracy has decayed, which needs realised
+outcomes the dataset does not contain.
+
+---
+
 ## Testing and quality
 
-**214 tests, 85% coverage.** The ones worth pointing at:
+**247 tests, 86% coverage.** The ones worth pointing at:
+
+> Coverage reads 86% locally and ~68% in CI. Both are honest: GitHub has no
+> `data/Loan_Default.csv`, so the dataset-dependent tests skip there. The gap is
+> the price of not committing a 28MB CSV, not a discrepancy.
 
 | Test | What it defends |
 |---|---|
@@ -478,6 +567,9 @@ Design decisions behind it:
 | `test_deployment_readiness.py` | The model artifact is **tracked by git**, not merely present on disk |
 | `test_grades_and_stress.py` | Grade monotonicity; shocks propagate in the right direction |
 | `test_training.py` | Two training runs from the same seed produce identical metrics |
+| `test_risk.py` | PD and margin share a horizon; the cut-off stays in a plausible credit range |
+| `test_monitoring.py` | A simulated 40% income shock is actually detected as drift |
+| `test_readme_renders.py` | The diagram renders and no link is silently truncated |
 
 The deployment-readiness tests exist because of a real failure: a stale
 `.gitignore` rule excluded the retrained model, so the deployed service started
@@ -598,8 +690,13 @@ must not be used for, real lending decisions.
   in the data, so the model describes the through-the-door population that got
   approved, not all applicants. This is survivorship bias and reject inference
   would be needed to address it.
-- **`Credit_Score` is not predictive** in this dataset (univariate AUC 0.503) and
-  appears to be randomly generated. It is retained for contract completeness only.
+- **`Credit_Score` is not predictive** in this dataset (univariate AUC 0.503, and
+  a flat default rate across all ten deciles). It appears to be randomly
+  generated. It is kept as a model input deliberately: a real underwriting
+  payload carries a bureau score, and a contract that refused one would not be
+  usable. The tree model assigns it near-zero importance, so it costs a little
+  variance and no bias — but its SHAP value must not be interpreted, and a test
+  asserts it stays non-predictive rather than quietly becoming a driver.
 - **The fairness analysis is not a compliance assessment.** Protected attributes
   were excluded as a model-design and fair-lending safeguard. Excluding them does
   not by itself eliminate proxy effects, and no claim of regulatory compliance is

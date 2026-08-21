@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 MODEL_FILENAME = "model.joblib"
 METADATA_FILENAME = "metadata.json"
 METRICS_FILENAME = "metrics.json"
+BASELINE_FILENAME = "baseline_sample.csv"
 
 
 @dataclass
@@ -105,6 +106,7 @@ class ModelRegistry:
         model: Any,
         metadata: ModelMetadata,
         metrics: dict[str, Any],
+        baseline: pd.DataFrame | None = None,
     ) -> Path:
         target = self.artifacts_dir / metadata.model_version
         target.mkdir(parents=True, exist_ok=True)
@@ -116,6 +118,13 @@ class ModelRegistry:
         (target / METRICS_FILENAME).write_text(
             json.dumps(metrics, indent=2, default=str), encoding="utf-8"
         )
+        if baseline is not None:
+            # The reference distribution for drift monitoring, captured from the
+            # data the model was actually fitted on. Versioned alongside the
+            # model because "has the input drifted" is only meaningful relative
+            # to a specific model's training distribution.
+            baseline.to_csv(target / BASELINE_FILENAME, index=False)
+
         (self.artifacts_dir / "LATEST").write_text(metadata.model_version, encoding="utf-8")
 
         logger.info("saved model %s to %s", metadata.model_version, target)
@@ -144,6 +153,19 @@ class ModelRegistry:
                 f"No model artifacts in {self.artifacts_dir}. Run: python -m loan_default.models.train"
             )
         return versions[-1]
+
+    def load_baseline(self, version: str = "latest") -> pd.DataFrame | None:
+        """The training-distribution sample for drift comparison, if one was saved.
+
+        Returns None rather than raising: an older artifact predates baseline
+        capture, and monitoring being unavailable should not stop the model
+        serving predictions.
+        """
+        target = self.artifacts_dir / self.resolve_version(version)
+        path = target / BASELINE_FILENAME
+        if not path.exists():
+            return None
+        return pd.read_csv(path)
 
     def load(self, version: str = "latest") -> tuple[Any, ModelMetadata, dict[str, Any]]:
         resolved = self.resolve_version(version)

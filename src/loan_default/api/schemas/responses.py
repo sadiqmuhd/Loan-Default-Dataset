@@ -50,7 +50,30 @@ class LossComponentsOut(BaseModel):
 class DecisionOut(BaseModel):
     decision: Literal["APPROVE", "REVIEW", "DECLINE"]
     reason: str = Field(description="Plain-language justification for the decision.")
-    break_even_pd: float = Field(description="PD at which expected margin equals expected loss.")
+    hurdle_pd: float = Field(
+        description=(
+            "The applied cut-off: the PD at which RAROC equals the cost of equity. "
+            "Varies with LGD, so better-collateralised exposures are tolerated at a "
+            "higher PD."
+        )
+    )
+    break_even_pd: float = Field(
+        description=(
+            "PD at which expected margin merely offsets expected loss. Reported for "
+            "transparency and always looser than hurdle_pd; it is NOT the cut-off, "
+            "because a loan at break-even earns nothing on the capital held against it."
+        )
+    )
+    raroc: float = Field(description="Risk-adjusted return on the capital this loan consumes.")
+    cost_of_equity: float = Field(description="Required return on capital; the hurdle RAROC.")
+    capital_required: float = Field(description="Capital held against this exposure.")
+    horizon_years: float = Field(
+        description=(
+            "Period over which BOTH the PD and the margin are measured. These must "
+            "match; comparing a 12-month PD to multi-year revenue overstates the "
+            "economics by roughly the ratio of the two horizons."
+        )
+    )
     expected_profit: float
     expected_revenue: float
     expected_loss: float
@@ -69,11 +92,19 @@ class RiskAssessmentResponse(BaseModel):
                 "grade_description": "Low risk",
                 "decision": {
                     "decision": "APPROVE",
-                    "reason": "PD 3.63% is below the break-even PD of 36.33%.",
-                    "break_even_pd": 0.3633,
-                    "expected_profit": 423_711.0,
-                    "expected_revenue": 427_600.0,
-                    "expected_loss": 3_889.0,
+                    "reason": (
+                        "PD 3.63% clears the hurdle PD of 3.85% over a 1-year horizon. "
+                        "RAROC 13.2% exceeds the 12.0% cost of equity."
+                    ),
+                    "hurdle_pd": 0.0385,
+                    "break_even_pd": 0.0741,
+                    "raroc": 0.132,
+                    "cost_of_equity": 0.12,
+                    "capital_required": 8_560.0,
+                    "horizon_years": 1.0,
+                    "expected_profit": 1_251.0,
+                    "expected_revenue": 2_062.0,
+                    "expected_loss": 811.0,
                 },
             }
         }

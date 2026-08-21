@@ -3,7 +3,7 @@
 # Bump `version` whenever any number below changes. It is returned on every
 # assessment, so a decision made last month can be traced to the assumptions
 # that were actually in force when it was made rather than the current ones.
-version: "1.0.0"
+version: "2.0.0"
 #
 # EVERY NUMBER IN THIS FILE IS AN ASSUMPTION, NOT AN ESTIMATE.
 # The dataset contains no recovery cash flows, no workout costs, no
@@ -17,13 +17,24 @@ version: "1.0.0"
 # Grades are a policy choice, not a model output; they are calibrated to this
 # portfolio's PD distribution and are not comparable to any external scale.
 # ---------------------------------------------------------------------------
+#
+# Boundaries are set against the OBSERVED PD distribution on the held-out set,
+# not chosen as round numbers. An earlier scale started grade A at PD < 2%,
+# which held 88 loans - 0.35% of the book. That was not a usable grade: isotonic
+# calibration floors this model's output at about 1.4%, so a sub-2% band is
+# nearly unreachable by construction, and zero defaults in 88 loans is not
+# evidence of anything.
+#
+# Every grade below now carries at least 4% of the book, and observed default
+# rates remain strictly monotonic A -> G (asserted by
+# tests/model/test_grades_and_stress.py).
 grades:
-  - {grade: A, max_pd: 0.02, description: "Minimal risk"}
+  - {grade: A, max_pd: 0.03, description: "Minimal risk"}
   - {grade: B, max_pd: 0.05, description: "Low risk"}
-  - {grade: C, max_pd: 0.10, description: "Modest risk"}
-  - {grade: D, max_pd: 0.20, description: "Average risk"}
-  - {grade: E, max_pd: 0.35, description: "Elevated risk"}
-  - {grade: F, max_pd: 0.60, description: "High risk"}
+  - {grade: C, max_pd: 0.08, description: "Modest risk"}
+  - {grade: D, max_pd: 0.13, description: "Average risk"}
+  - {grade: E, max_pd: 0.25, description: "Elevated risk"}
+  - {grade: F, max_pd: 0.50, description: "High risk"}
   - {grade: G, max_pd: 1.01, description: "Severe risk"}
 
 # ---------------------------------------------------------------------------
@@ -54,20 +65,40 @@ ead:
   utilisation: 1.0
 
 # ---------------------------------------------------------------------------
-# Decision policy. The approve/decline cut-off is derived economically rather
-# than chosen, by solving for the PD at which expected margin equals expected
-# loss:
-#     (1 - PD) * EAD * margin * life  ==  PD * LGD * EAD
-# The resulting break-even PD is computed at runtime; the values below are the
-# economic inputs to that calculation.
+# Decision policy.
+#
+# HORIZON. The single most important number in this file is pd_horizon_years.
+# The model is trained on `Status`, which the dataset does not define and which
+# MODEL_CARD.md treats as a 12-month default flag. Every economic quantity below
+# is therefore expressed over that SAME 12-month horizon.
+#
+# An earlier version of this policy compared a 12-month PD against seven years
+# of accumulated margin (2% x 7 = 14%). That is a units error: it overstated the
+# economics of every loan by roughly 7x and produced a break-even PD of 58%,
+# which would approve a borrower with a coin-flip chance of defaulting inside a
+# year. PD and revenue must be measured over the same period.
+#
+# If a lifetime PD were available, pd_horizon_years would move to the expected
+# life and the margin would accumulate over it. It is not, so both stay at one
+# year and the limitation is stated rather than assumed away.
 # ---------------------------------------------------------------------------
 economics:
+  pd_horizon_years: 1.0           # horizon of BOTH the PD and the margin below
   annual_net_margin: 0.02         # 200 bps net interest margin over funding
-  expected_life_years: 7.0        # average realised life of a 30y mortgage after prepayment
-  loss_aversion_multiplier: 1.0   # >1 makes the policy more conservative than break-even
+  expected_life_years: 7.0        # recorded for reference; NOT used in the cut-off
+
+  # HURDLE RATE. Break-even is a floor, not a credit policy. A bank does not
+  # write a loan that merely covers its expected loss - it has to earn its cost
+  # of equity on the capital the loan consumes. The cut-off below is the PD at
+  # which risk-adjusted return on capital equals that cost.
+  capital_ratio: 0.08             # capital held against exposure (Basel-style 8%)
+  cost_of_equity: 0.12            # annual hurdle return on that capital
+  loss_aversion_multiplier: 1.0   # >1 weights expected loss above its expectation
 
 decision:
-  # Applications within this band of the break-even PD go to a human underwriter
-  # instead of being auto-decided.
-  manual_review_margin: 0.05
+  # Applications within this FRACTION of the hurdle PD go to a human underwriter
+  # instead of being auto-decided. Expressed relatively rather than in absolute
+  # percentage points: a +/-5pp band sized against the old 58% threshold would
+  # swamp a realistic hurdle near 9%, sending most of the book to review.
+  manual_review_band_fraction: 0.25
   hard_decline_grade: G           # auto-decline regardless of economics

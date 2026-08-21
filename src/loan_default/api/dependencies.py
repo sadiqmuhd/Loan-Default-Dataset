@@ -59,7 +59,13 @@ def load_model_state(settings: Settings) -> ModelState:
             logger.exception("explainer unavailable; assessments will omit reason codes")
             explainer = None
 
-        service = ScoringService(model, metadata, metrics, explainer)
+        try:
+            baseline = registry.load_baseline()
+        except Exception:
+            logger.exception("drift baseline unavailable; /v1/monitoring/drift will return 503")
+            baseline = None
+
+        service = ScoringService(model, metadata, metrics, explainer, baseline=baseline)
         state.service = service
         state.model_version = metadata.model_version
 
