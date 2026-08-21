@@ -1,5 +1,10 @@
 # Credit policy parameters.
 #
+# Bump `version` whenever any number below changes. It is returned on every
+# assessment, so a decision made last month can be traced to the assumptions
+# that were actually in force when it was made rather than the current ones.
+version: "1.0.0"
+#
 # EVERY NUMBER IN THIS FILE IS AN ASSUMPTION, NOT AN ESTIMATE.
 # The dataset contains no recovery cash flows, no workout costs, no
 # time-to-resolution and no balance history, so LGD and EAD cannot be modelled

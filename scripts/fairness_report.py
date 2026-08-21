@@ -33,12 +33,12 @@ from sklearn.metrics import roc_auc_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from credit_risk.config import get_settings, load_model_config, load_risk_policy  # noqa: E402
-from credit_risk.data.loader import load_dataset  # noqa: E402
-from credit_risk.logging_config import configure_logging  # noqa: E402
-from credit_risk.models.registry import ModelRegistry  # noqa: E402
-from credit_risk.risk.grades import assign_grades  # noqa: E402
-from credit_risk.risk.policy import break_even_pd  # noqa: E402
+from loan_default.config import get_settings, load_model_config, load_risk_policy  # noqa: E402
+from loan_default.data.loader import load_dataset  # noqa: E402
+from loan_default.logging_config import configure_logging  # noqa: E402
+from loan_default.models.registry import ModelRegistry  # noqa: E402
+from loan_default.risk.grades import assign_grades  # noqa: E402
+from loan_default.risk.policy import break_even_pd  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def cost_of_exclusion(seed: int = 42) -> dict:
     """
     from sklearn.model_selection import train_test_split
 
-    from credit_risk.models.pipeline import build_pipeline
+    from loan_default.models.pipeline import build_pipeline
 
     cfg = load_model_config()
     raw = pd.read_csv(get_settings().data_path)

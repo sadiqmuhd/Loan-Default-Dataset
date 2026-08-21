@@ -14,7 +14,7 @@ import tomllib
 
 import pytest
 
-from credit_risk.config import PROJECT_ROOT
+from loan_default.config import PROJECT_ROOT
 
 PYPROJECT = PROJECT_ROOT / "pyproject.toml"
 REQUIREMENTS = PROJECT_ROOT / "requirements.txt"

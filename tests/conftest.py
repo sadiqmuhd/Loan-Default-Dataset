@@ -14,8 +14,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from credit_risk.config import PROJECT_ROOT, get_settings, load_model_config
-from credit_risk.models.registry import ModelRegistry
+from loan_default.config import PROJECT_ROOT, get_settings, load_model_config
+from loan_default.models.registry import ModelRegistry
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -32,7 +32,7 @@ def _artifact_available() -> bool:
 
 requires_model = pytest.mark.skipif(
     not _artifact_available(),
-    reason="No trained model artifact. Run: python -m credit_risk.models.train",
+    reason="No trained model artifact. Run: python -m loan_default.models.train",
 )
 requires_data = pytest.mark.skipif(
     not DATA_PATH.exists(),
@@ -66,7 +66,7 @@ def app_client():
     """A TestClient with lifespan run, so the model is actually loaded."""
     from fastapi.testclient import TestClient
 
-    from credit_risk.api.main import create_app
+    from loan_default.api.main import create_app
 
     with TestClient(create_app()) as client:
         yield client
@@ -74,15 +74,15 @@ def app_client():
 
 @pytest.fixture(scope="session")
 def example_application() -> dict:
-    from credit_risk.api.schemas.requests import EXAMPLE_VALUES
+    from loan_default.api.schemas.requests import EXAMPLE_VALUES
 
     return dict(EXAMPLE_VALUES)
 
 
 @pytest.fixture(scope="session")
 def scoring_service(loaded_model):
-    from credit_risk.api.service import ScoringService
-    from credit_risk.models.explain import PredictionExplainer
+    from loan_default.api.service import ScoringService
+    from loan_default.models.explain import PredictionExplainer
 
     model, metadata, metrics = loaded_model
     return ScoringService(model, metadata, metrics, PredictionExplainer(model))

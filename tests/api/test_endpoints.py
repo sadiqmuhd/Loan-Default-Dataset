@@ -44,7 +44,7 @@ def test_assess_returns_full_assessment(app_client, example_application):
 
     assert 0.0 <= body["probability_of_default"] <= 1.0
     assert body["risk_grade"] in list("ABCDEFG")
-    assert body["decision"]["decision"] in {"APPROVE", "REFER", "DECLINE"}
+    assert body["decision"]["decision"] in {"APPROVE", "REVIEW", "DECLINE"}
     assert body["model_version"]
     assert body["request_id"]
     assert body["assessed_at"]
@@ -181,7 +181,7 @@ def test_empty_batch_rejected(app_client):
 
 
 def test_oversized_batch_rejected(app_client, example_application, monkeypatch):
-    from credit_risk.config import get_settings
+    from loan_default.config import get_settings
 
     settings = get_settings()
     monkeypatch.setattr(settings, "max_batch_size", 3)
@@ -225,3 +225,91 @@ def test_openapi_schema_is_valid(app_client):
     schema = app_client.get("/openapi.json").json()
     assert "/v1/risk/assess" in schema["paths"]
     assert "/v1/portfolio/stress-test" in schema["paths"]
+
+
+# ------------------------------------------------- batch partial failure
+
+
+def test_batch_scores_valid_rows_despite_invalid_ones(app_client, example_application):
+    """One bad row must not cost the caller the rest of the batch.
+
+    A nightly portfolio run of 5,000 loans should not be lost to a single
+    malformed record, so rows are validated individually rather than as a typed
+    list, which Pydantic would reject wholesale.
+    """
+    payload = {
+        "applications": [
+            example_application,
+            {**example_application, "credit_type": "STD"},
+            example_application,
+        ]
+    }
+    response = app_client.post("/v1/risk/batch", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["n_submitted"] == 3
+    assert body["n_succeeded"] == 2
+    assert body["n_failed"] == 1
+
+    by_index = {row["index"]: row for row in body["results"]}
+    assert by_index[0]["assessment"] is not None
+    assert by_index[2]["assessment"] is not None
+    assert by_index[1]["assessment"] is None
+    assert "credit_type" in by_index[1]["error"]
+
+
+def test_batch_results_stay_in_submitted_order(app_client, example_application):
+    """Indices must line up with what the caller sent, however rows interleave."""
+    payload = {
+        "applications": [
+            {**example_application, "loan_amount": -1},
+            example_application,
+            {"nonsense": True},
+            example_application,
+        ]
+    }
+    body = app_client.post("/v1/risk/batch", json=payload).json()
+    assert [row["index"] for row in body["results"]] == [0, 1, 2, 3]
+    assert [row["assessment"] is not None for row in body["results"]] == [
+        False,
+        True,
+        False,
+        True,
+    ]
+
+
+def test_batch_of_entirely_invalid_rows_still_returns_200(app_client, example_application):
+    """Per-row reporting, not a blanket rejection - the caller needs to know
+    which rows failed and why."""
+    body = app_client.post(
+        "/v1/risk/batch",
+        json={"applications": [{"nope": 1}, {**example_application, "LTV": 9999}]},
+    ).json()
+    assert body["n_succeeded"] == 0
+    assert body["n_failed"] == 2
+    assert body["portfolio"] is None
+    assert all(row["error"] for row in body["results"])
+
+
+def test_batch_portfolio_covers_only_scored_rows(app_client, example_application):
+    body = app_client.post(
+        "/v1/risk/batch",
+        json={
+            "applications": [example_application] * 3
+            + [{**example_application, "Region": "nowhere"}]
+        },
+    ).json()
+    assert body["n_succeeded"] == 3
+    assert body["portfolio"]["n_exposures"] == 3
+
+
+def test_assessment_carries_assumptions_version(app_client, example_application):
+    """Loss figures are only comparable across responses sharing a policy version."""
+    body = app_client.post("/v1/risk/assess", json=example_application).json()
+    assert body["assumptions_version"] == "1.0.0"
+
+
+def test_review_is_a_valid_decision_value(app_client, example_application):
+    body = app_client.post("/v1/risk/assess", json=example_application).json()
+    assert body["decision"]["decision"] in {"APPROVE", "REVIEW", "DECLINE"}

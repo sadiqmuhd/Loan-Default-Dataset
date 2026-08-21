@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Model version** | `v20260820T235355Z` |
+| **Model version** | `v20260821T011832Z` |
 | **Model type** | XGBoost classifier + isotonic calibration |
 | **Task** | Binary probability of default at loan origination |
 | **Owner** | Abubakar Sadiq Muhammad |
@@ -92,9 +92,10 @@ those three missingness flags scores ROC-AUC **0.7155**. Median imputation leave
 a recoverable signature at the imputed value, so rows missing them are dropped
 instead. This is the 16.2% of rows removed above.
 
-**Protected characteristics — removed.** `Gender` and `age` are excluded under
-ECOA / Regulation B. Measured cost: **4.6 basis points of ROC-AUC**
-(0.8258 → 0.8253).
+**Protected characteristics — removed.** `Gender` and `age` are excluded as a
+fair-lending safeguard, motivated by the principles behind ECOA / Regulation B.
+This is a model-design decision, not a claim of regulatory compliance. Measured
+cost: **4.6 basis points of ROC-AUC** (0.8258 → 0.8253).
 
 **Identifiers — removed.** `ID` (unique per row) and `year` (constant).
 
@@ -118,11 +119,24 @@ Held-out test set, n = 24,910, base rate 16.32%.
 
 PR-AUC of 0.6104 against a 0.1632 base rate is a **3.7× lift**.
 
-**On calibration.** Isotonic calibration barely moves Brier score (0.0932 →
-0.0933) and slightly *reduces* PR-AUC, but it more than halves the maximum
-calibration error (0.0309 → 0.0136). That is the correct trade for this use:
-the PD feeds an expected-loss calculation, so being right in absolute terms
-matters more than a marginal gain in ranking.
+**On calibration.** Both candidate calibrators were fitted on the held-out
+calibration slice and measured on the test set:
+
+| Method | Brier | Mean cal. error | Max cal. error | ROC-AUC |
+|---|---|---|---|---|
+| Uncalibrated | 0.09324 | 0.00884 | 0.03091 | 0.8249 |
+| **Isotonic (selected)** | 0.09333 | **0.00598** | **0.01355** | 0.8244 |
+| Platt (sigmoid) | 0.09382 | 0.02360 | 0.03612 | 0.8249 |
+
+Isotonic roughly halves calibration error. Platt scaling makes it *worse than
+doing nothing*, because its sigmoid assumption does not fit this model's score
+distribution.
+
+Selection is on calibration error rather than Brier score. Brier mixes
+discrimination and calibration together, so it barely moves when only the latter
+improves — it would have hidden the difference being measured. Since the PD is
+multiplied by LGD and EAD to produce a currency figure, being right in absolute
+terms matters more here than a marginal gain in ranking.
 
 ### Model selection
 
@@ -160,7 +174,9 @@ Observed default rate is monotonic across grades (asserted by
 
 `Gender` and `age` are not model inputs and are **not accepted by the API at
 all** — the request schema rejects them, so the service cannot receive a
-protected characteristic even by accident.
+protected characteristic even by accident. This is a design decision taken on
+fair-lending grounds; it is not a compliance assessment, which would require
+legal review this project has not had.
 
 Outcomes are nonetheless measured across groups, because exclusion does not rule
 out disparate impact through correlated proxies. Adverse impact ratios against
@@ -183,6 +199,14 @@ fairness report — but this is a judgement call that a real model risk function
 would need to review.
 
 Regenerate with `make report`.
+
+### Performance by segment
+
+A single headline AUC can hide a segment where the model does not discriminate.
+Measured across region, loan purpose, occupancy type and credit bureau, every
+segment above 200 loans clears a 0.65 ROC-AUC floor and a 3pp calibration
+tolerance. The weakest is `loan_purpose = p2` (ROC-AUC 0.734 on 574 loans).
+Full breakdown in `reports/validation_report.md`.
 
 ---
 
@@ -213,16 +237,31 @@ confidence** and should be read as directional. These are **not CCAR or DFAST**.
 **4. No interest-rate sensitivity.** The rate variables are excluded as leakage,
 so the model cannot be stressed on rates.
 
-**5. Complete-case bias.** The 16.2% of rows dropped are not missing at random —
+**5. Only originated loans are observed (through-the-door bias).** The dataset
+contains loans that were approved and funded. Every applicant the original
+lender declined is absent, so the model is fitted on an accepted population but
+would, in use, score the full through-the-door population — including applicants
+that the policy generating this data would have rejected. Its behaviour on that
+unobserved region is unknown.
+
+This is what reject inference exists to address, and it cannot be done here:
+correcting for it requires data on declined applicants, which this dataset does
+not contain. A production deployment would need either that data or a monitored
+champion/challenger arrangement to learn the missing region safely. It also
+means the approval rates in the fairness analysis describe outcomes on an
+already-filtered population, so any bias in the original credit policy is
+invisible to this analysis.
+
+**6. Complete-case bias.** The 16.2% of rows dropped are not missing at random —
 their missingness is precisely what predicted default. The model is therefore
 calibrated to the complete-case population (16.3% default rate), not to the full
 book (24.6%). A production system would need an explicit policy for applications
 with missing collateral data.
 
-**6. `Status` has no stated observation window.** It is treated as a 12-month
+**7. `Status` has no stated observation window.** It is treated as a 12-month
 default flag; the dataset does not confirm this.
 
-**7. `income` is interpreted as monthly.** Median income 5,760 against a median
+**8. `income` is interpreted as monthly.** Median income 5,760 against a median
 loan of 296,500. Read as annual this implies a 52× loan-to-income ratio, which is
 not a real mortgage; read as monthly it gives 4.36×, which is. Cross-checked
 against a reported median DTI of 39% versus an implied principal-only burden of

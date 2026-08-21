@@ -10,7 +10,7 @@ builder = "NIXPACKS"
 
 [deploy]
 # Railway injects $PORT. Binding to it is required or the deploy is unreachable.
-startCommand = "uvicorn credit_risk.api.main:app --host 0.0.0.0 --port $PORT --workers 2"
+startCommand = "uvicorn loan_default.api.main:app --host 0.0.0.0 --port $PORT --workers 2"
 
 # Railway waits for this to return 200 before routing traffic. /health/ready
 # only succeeds once the model is loaded AND has scored a canary record, so a

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from credit_risk.features.engineering import add_features
+from loan_default.features.engineering import add_features
 
 BASE = {
     "loan_amount": 296_500.0,
